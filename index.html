@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Calc Tools</title>
+    <style>
+        /* Same CSS styles as before */
+        /* ... */
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <a href="#" onclick="showPage('cosine-theorem')">Cosine Theorem Calculator</a>
+        <!-- Add more sidebar links here -->
+    </div>
+
+    <div class="content">
+        <div id="page-content">
+            <!-- Page content will be dynamically loaded here -->
+        </div>
+    </div>
+
+    <!-- Include the JavaScript files for each page -->
+    <script src="./cosine-theorem.js"></script>
+    <!-- Add more page JavaScript files here -->
+
+    <script>
+        function showPage(pageName) {
+            const pageContent = document.getElementById('page-content');
+
+            switch (pageName) {
+                case 'cosine-theorem':
+                    pageContent.innerHTML = getCosineTheoremCalcHTML();
+                    calculateCosineTheorem();
+                    break;
+                // Add more cases for other pages
+                default:
+                    pageContent.innerHTML = '';
+            }
+        }
+    </script>
+</body>
+
+</html>
