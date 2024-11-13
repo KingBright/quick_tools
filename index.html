@@ -2,74 +2,84 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quick Tools</title>
-    <style>
-        body {
-          font-family: Arial, sans-serif;
-          margin: 0;
-          display: flex;
-          height: 100vh;
-        }
-        .sidebar {
-          background-color: #f1f1f1;
-          padding: 16px;
-          width: 200px;
-        }
-        .sidebar a {
-          display: block;
-          padding: 8px 16px;
-          text-decoration: none;
-          color: #333;
-        }
-        .sidebar a:hover {
-          background-color: #ddd;
-        }
-        .content {
-          flex: 1;
-          padding: 16px;
-        }
-        .card {
-          background-color: white;
-          border-radius: 4px;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          padding: 16px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Tools</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      background-color: #f1f1f1;
+      padding: 16px;
+      width: 200px;
+    }
+
+    .sidebar a {
+      display: block;
+      padding: 8px 16px;
+      text-decoration: none;
+      color: #333;
+    }
+
+    .sidebar a:hover {
+      background-color: #ddd;
+    }
+
+    .content {
+      flex: 1;
+      padding: 16px;
+    }
+
+    .card {
+      background-color: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 16px;
+    }
+  </style>
 </head>
 
 <body>
-    <div class="sidebar">
-        <a href="#" onclick="showPage('cosine-theorem')">Cosine Theorem Calculator</a>
-        <!-- Add more sidebar links here -->
+  <div class="sidebar">
+    <a href="#" onclick="showPage('cosine-theorem')">Cosine Theorem Calculator</a>
+    <a href="#" onclick="showPage('angle-converter')">Angle Converter</a>
+    <!-- Add more sidebar links here -->
+  </div>
+
+  <div class="content">
+    <div id="page-content">
+      <!-- Page content will be dynamically loaded here -->
     </div>
+  </div>
 
-    <div class="content">
-        <div id="page-content">
-            <!-- Page content will be dynamically loaded here -->
-        </div>
-    </div>
+  <!-- Include the JavaScript files for each page -->
+  <script src="./cosine-theorem.js"></script>
+  <script src="./angle-converter.js"></script>
+  <!-- Add more page JavaScript files here -->
 
-    <!-- Include the JavaScript files for each page -->
-    <script src="./cosine-theorem.js"></script>
-    <!-- Add more page JavaScript files here -->
+  <script>
+    function showPage(pageName) {
+      const pageContent = document.getElementById('page-content');
 
-    <script>
-        function showPage(pageName) {
-            const pageContent = document.getElementById('page-content');
-
-            switch (pageName) {
-                case 'cosine-theorem':
-                    pageContent.innerHTML = getCosineTheoremCalcHTML();
-                    calculateCosineTheorem();
-                    break;
-                // Add more cases for other pages
-                default:
-                    pageContent.innerHTML = '';
-            }
-        }
-    </script>
+      switch (pageName) {
+        case 'cosine-theorem':
+          pageContent.innerHTML = getCosineTheoremCalcHTML();
+          calculateCosineTheorem();
+          break;
+        case 'angle-converter':
+          pageContent.innerHTML = getAngleConverterHTML();
+          break;
+        // Add more cases for other pages
+        default:
+          pageContent.innerHTML = '';
+      }
+    }
+  </script>
 </body>
 
 </html>
