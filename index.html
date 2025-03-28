@@ -48,6 +48,7 @@
   <div class="sidebar">
     <a href="#" onclick="showPage('cosine-theorem')">Cosine Theorem Calculator</a>
     <a href="#" onclick="showPage('angle-converter')">Angle Converter</a>
+    <a href="#" onclick="showPage('excavator-renderer')">Excavator Renderer</a>
     <!-- Add more sidebar links here -->
   </div>
 
@@ -60,6 +61,8 @@
   <!-- Include the JavaScript files for each page -->
   <script src="./cosine-theorem.js"></script>
   <script src="./angle-converter.js"></script>
+  <script src="./excavator-renderer.js"></script>
+
   <!-- Add more page JavaScript files here -->
 
   <script>
@@ -73,6 +76,10 @@
           break;
         case 'angle-converter':
           pageContent.innerHTML = getAngleConverterHTML();
+          break;
+        case 'excavator-renderer':
+          pageContent.innerHTML = getExcavatorRendererHTML();
+          initExcavatorRenderer();
           break;
         // Add more cases for other pages
         default:

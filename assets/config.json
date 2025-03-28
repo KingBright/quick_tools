@@ -1,0 +1,38 @@
+[
+  {
+    "part": "body",
+    "size": [215.0, 147.0],
+    "rotate_anchor": [0.0, 0.0],
+    "rotate_anchor_pos": [0.0, 0.0],
+    "next_anchor": [-0.18, 0.14],
+    "rotate": 0.0,
+    "center": [0.0, 0.0]
+  },
+  {
+    "part": "boom",
+    "size": [236.0, 166.0],
+    "rotate_anchor": [0.44, 0.44],
+    "rotate_anchor_pos": [0.0, 0.0],
+    "next_anchor": [-0.44, -0.42],
+    "rotate": 0.0,
+    "center": [0.0, 0.0]
+  },
+  {
+    "part": "arm",
+    "size": [32.0, 163.0],
+    "rotate_anchor": [0.0, 0.4],
+    "rotate_anchor_pos": [0.0, 0.0],
+    "next_anchor": [0.0, -0.45],
+    "rotate": 0.0,
+    "center": [0.0, 0.0]
+  },
+  {
+    "part": "bucket",
+    "size": [74.0, 74.0],
+    "rotate_anchor": [-0.16, 0.38],
+    "rotate_anchor_pos": [0.0, 0.0],
+    "next_anchor": [0.476, -0.44],
+    "rotate": 0.0,
+    "center": [0.0, 0.0]
+  }
+]
