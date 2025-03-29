@@ -1,0 +1,364 @@
+/* General Styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    margin: 0;
+    display: flex;
+    height: 100vh;
+    background-color: #f8f9fa;
+    /* Lighter background */
+    color: #212529;
+    /* Darker text for contrast */
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+h2,
+h3,
+h4,
+h5 {
+    margin-top: 0;
+    color: #343a40;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    background-color: #e9ecef;
+    /* Slightly darker sidebar */
+    padding: 20px 0;
+    /* Adjust padding */
+    width: 240px;
+    /* Slightly wider */
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    /* Subtle shadow */
+    overflow-y: auto;
+    /* Add scroll if needed */
+}
+
+.sidebar a {
+    display: block;
+    padding: 12px 20px;
+    /* Increase padding */
+    text-decoration: none;
+    color: #495057;
+    /* Slightly darker link color */
+    border-left: 3px solid transparent;
+    /* For active indicator */
+    transition: background-color 0.2s ease, border-left-color 0.2s ease;
+    /* Smooth transition */
+}
+
+.sidebar a:hover {
+    background-color: #dee2e6;
+    /* Hover effect */
+    color: #000;
+}
+
+.sidebar a.active {
+    background-color: #ced4da;
+    /* Active background */
+    border-left-color: #007bff;
+    /* Active indicator color (Bootstrap primary blue) */
+    font-weight: 500;
+    /* Slightly bolder */
+    color: #000;
+}
+
+/* Content Area Styles */
+.content {
+    flex: 1;
+    padding: 25px;
+    overflow-y: auto;
+    /* Enable scrolling for content */
+}
+
+.card {
+    background-color: white;
+    border-radius: 8px;
+    /* Softer corners */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    /* Softer shadow */
+    padding: 25px;
+    margin-bottom: 25px;
+    /* Spacing between cards if multiple were shown */
+}
+
+.card h2 {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+/* Form Group & Input Styles */
+.form-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+    /* Spacing between label and input */
+}
+
+.form-group label {
+    flex: 0 0 100px;
+    /* Fixed width for labels */
+    text-align: right;
+    color: #495057;
+}
+
+.form-group input[type="number"],
+.form-group input[type="text"],
+.form-group select {
+    flex: 1;
+    /* Input takes remaining space */
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input[type="number"]:focus,
+.form-group input[type="text"]:focus,
+.form-group select:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Specific input widths */
+.form-group input.short-input {
+    flex: 0 1 100px;
+    /* Allow shrinking, basis 100px */
+}
+
+/* Button Styles */
+button {
+    padding: 10px 18px;
+    font-size: 1rem;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-right: 10px;
+    /* Spacing between buttons */
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:last-child {
+    margin-right: 0;
+}
+
+/* Result Area Styles */
+.result-area {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f1f3f5;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    /* Wrap text */
+}
+
+.result-area.error {
+    color: #dc3545;
+    /* Red for errors */
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* Table Styles (for Angle Converter) */
+.reference-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.reference-table th,
+.reference-table td {
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+    text-align: left;
+}
+
+.reference-table th {
+    background-color: #f1f3f5;
+    font-weight: 600;
+}
+
+.reference-table tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+/* Excavator Renderer Specific Styles */
+.excavator-layout {
+    display: flex;
+    flex-direction: row;
+    gap: 25px;
+    /* Space between canvas and controls */
+}
+
+.excavator-canvas-container {
+    flex: 1;
+    /* Canvas takes available space */
+    min-width: 0;
+    /* Prevent flex item from overflowing */
+}
+
+#excavator-canvas {
+    border: 1px solid #dee2e6;
+    background-color: #f8f8f8;
+    display: block;
+    /* Remove extra space below canvas */
+    max-width: 100%;
+    height: auto;
+    /* Maintain aspect ratio */
+}
+
+.excavator-controls {
+    /* Increased width */
+    width: 480px;
+    flex-shrink: 0;
+    /* Prevent controls from shrinking */
+    padding-left: 25px;
+    /* Slightly increased padding */
+    border-left: 1px solid #e9ecef;
+    overflow-y: auto;
+    /* Allow scrolling if content overflows */
+}
+
+.control-section {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.control-section:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.control-section h4 {
+    margin-bottom: 15px;
+}
+
+.slider-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.slider-group label {
+    /* Adjusted label width */
+    width: 110px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.slider-group input[type="range"] {
+    flex-grow: 1;
+}
+
+.slider-group .value-display {
+    font-size: 0.9em;
+    color: #495057;
+    /* Increased min-width */
+    min-width: 130px;
+    /* Wider to prevent wrapping */
+    text-align: right;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#part-measurements {
+    background: #f5f5f5;
+    padding: 15px;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 13px;
+    /* Slightly larger monospace */
+    line-height: 1.6;
+    max-height: 200px;
+    /* Limit height */
+    overflow-y: auto;
+    /* Add scroll if needed */
+}
+
+#part-measurements table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#part-measurements td,
+#part-measurements th {
+    padding: 4px 6px;
+    border-bottom: 1px solid #ddd;
+    font-size: 12px;
+}
+
+#part-measurements th {
+    font-weight: bold;
+    text-align: left;
+    background-color: #e9ecef;
+}
+
+#part-measurements tr:last-child td {
+    border-bottom: none;
+}
+
+#part-measurements .inactive-part {
+    color: #999;
+    font-style: italic;
+}
+
+
+.anchor-controls h5 {
+    margin-top: 15px;
+    margin-bottom: 8px;
+}
+
+.anchor-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.anchor-input-group label {
+    width: auto;
+    /* Let label size naturally */
+}
+
+.anchor-input-group input[type="number"] {
+    width: 80px;
+    /* Fixed width for anchor inputs */
+    flex-grow: 0;
+}
+
+.button-group {
+    margin-top: 30px;
+}
+
+/* Debug specific styles */
+.debug-info {
+    font-size: 12px;
+    font-family: monospace;
+    color: #333;
+    position: absolute;
+    /* Example positioning */
+    top: 10px;
+    left: 10px;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border: 1px solid #ccc;
+    pointer-events: none;
+    /* Allow clicks through */
+}

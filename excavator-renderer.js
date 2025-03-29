@@ -1,1280 +1,411 @@
-// 在全局坐标系中绘制高度线
-function drawHeightLines(ctx) {
-  if (!debugMode) return;
+// excavator-renderer.js
 
-  const renderOrder = ["body", "boom", "arm", "bucket"];
+// --- Global Variables ---
+let excavatorParts = [];
+let excavatorImages = {};
+let globalOffset = { x: 200, y: -80 };
+let debugMode = false; // Controls connection point visibility
+let partsVisibility = { body: true, boom: true, arm: true, bucket: true };
+let originalAnchors = []; // Stores original anchors for reset
+// *** 确保 groundLine 在这里被正确声明和初始化 ***
+let groundLine = { start: { x: 0, y: 0 }, end: { x: 0, y: 0 } }; // Stores calculated ground line coords
+let originalSizes = {};   // Stores original SIZE from config ([width, height])
+let originalScales = {};  // Stores original SCALE from config (scalar)
+let originalConfigData = []; // Stores the full original config objects
 
-  // 为每个可见部件绘制高度线
-  for (let i = 0; i < renderOrder.length; i++) {
-    const partName = renderOrder[i];
-    const part = excavatorParts.find((p) => p.part === partName);
-
-    if (part && partsVisibility[partName]) {
-      // 在全局坐标系中绘制旋转锚点到底盘的高度线
-      const globalAnchorX = part.rotate_anchor_pos[0] + globalOffset.x;
-      const globalAnchorY = part.rotate_anchor_pos[1] + globalOffset.y;
-      const heightToGround = calculateHeightToGroundDistance(part);
-
-      // 绘制线段
-      ctx.save();
-      ctx.strokeStyle = "#4682B4"; // 钢蓝色
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(globalAnchorX, globalAnchorY);
-      // 保留原始绘制逻辑但移除底盘高度线
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // 标注高度
-      ctx.fillStyle = "#4682B4";
-      ctx.font = "10px Arial";
-
-      // 部件的中文名称
-      const partNameCN = {
-        body: "驾驶舱",
-        boom: "大臂",
-        arm: "小臂",
-        bucket: "铲斗",
-      }[partName];
-
-      // 在高度线中间位置显示高度值
-      let textX = globalAnchorX + 5;
-
-      // 根据高度值，调整标注位置
-      // 如果高度为负值(低于底盘)，显示在底盘下方
-      // 如果高度为正值(高于底盘)，显示在中间
-      let textY;
-      if (heightToGround < 0) {
-        textY = (groundLine.start.y + groundLine.end.y) / 2;
-      } else {
-        textY = globalAnchorY + heightToChassis / 2;
-      }
-
-      // 添加正负号来指示方向
-      const heightText =
-        heightToGround < 0
-          ? `${partNameCN}: ${Math.abs(heightToGround).toFixed(1)}px (下)`
-          : `${partNameCN}: +${Math.abs(heightToGround).toFixed(1)}px (上)`;
-      ctx.fillText(heightText, textX, textY);
-
-      ctx.restore();
-    }
-  }
-}
-// 计算旋转中心到底盘的高度
-function calculateHeightToGroundDistance(part) {
-  // 旋转中心对应的是rotate_anchor_pos
-  const height = calculateVerticalDistanceToLine(
-    part.rotate_anchor_pos[0],
-    part.rotate_anchor_pos[1],
-    groundLine.start.x,
-    groundLine.start.y,
-    groundLine.end.x,
-    groundLine.end.y
-  );
-  return height;
-}
-
-// 计算车身中心点到地面的距离
-function calculateBodyToGroundDistance() {
-  const bodyPart = excavatorParts.find((p) => p.part === "body");
-  if (!bodyPart) return 0;
-
-  // half of the body height
-  return bodyPart.size[1] / 2;
-} // 更新部件测量信息显示
-
-function updatePartMeasurements() {
-  const measurementsDiv = document.getElementById("part-measurements");
-  if (!measurementsDiv) return;
-
-  const partRatios = calculatePartsRatio();
-  const bodyHeight = partRatios.bodyHeight;
-
-  let html = `<div style="font-weight: bold; margin-bottom: 5px;">基准单位(车身到地面): ${bodyHeight.toFixed(
-    1
-  )}px</div>`;
-
-  // 创建一个表格显示测量数据
-  html +=
-    `<table style="width: 100%; border-collapse: collapse;">` +
-    `<tr style="border-bottom: 1px solid #ddd; font-weight: bold;">` +
-    `<td>部件</td><td>像素距离</td><td>比例</td><td>到底盘高度</td>` +
-    `</tr>`;
-
-  // 按渲染顺序显示部件
-  const renderOrder = ["body", "boom", "arm", "bucket"];
-
-  renderOrder.forEach((partName) => {
-    const part = excavatorParts.find((p) => p.part === partName);
-    const info = partRatios.ratios[partName];
-
-    // 计算旋转中心到底盘的高度
-    const heightToGround = calculateHeightToGroundDistance(part);
-
-    // 显示部件信息（即使未显示也展示其长度）
-    let style = "";
-    if (!partsVisibility[partName]) {
-      style = "color: #999; font-style: italic;";
-    }
-
-    // 根据各部件名称提供中文名称
-    const partNameCN = {
-      body: "驾驶舱",
-      boom: "大臂",
-      arm: "小臂",
-      bucket: "铲斗",
-    }[partName];
-
-    html +=
-      `<tr style="${style}">` +
-      `<td>${partNameCN}</td>` +
-      `<td>${info.pixelDistance.toFixed(1)}px</td>` +
-      `<td>${info.ratio.toFixed(2)}</td>` +
-      `<td>${heightToGround.toFixed(1)}px（地面，垂直距离）</td>` +
-      `</tr>`;
-  });
-
-  html += "</table>";
-
-  measurementsDiv.innerHTML = html;
-} // 计算部件的内部距离 (从旋转点到连接点)
-function calculatePartDistance(part) {
-  // 计算旋转点到连接点的正确比例距离
-  const dx = (part.next_anchor[0] - part.rotate_anchor[0]) * part.size[0];
-  const dy = (part.next_anchor[1] - part.rotate_anchor[1]) * part.size[1];
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-// 计算各部件的长度比例
-function calculatePartsRatio() {
-  // 获取车身中心点到地面的距离作为基准单位
-  const bodyToGroundDistance = calculateBodyToGroundDistance();
-
-  // 计算各部件的比例
-  const ratios = {};
-  excavatorParts.forEach((part) => {
-    const distance = calculatePartDistance(part);
-    ratios[part.part] = {
-      pixelDistance: distance,
-      ratio: distance / bodyToGroundDistance,
-    };
-  });
-
-  return { bodyHeight: bodyToGroundDistance, ratios };
-} // 在全局坐标系中绘制连接点，检查是否对齐
-function drawConnectionPoints(ctx) {
-  // 遍历每一对相邻部件
-  for (let i = 0; i < excavatorParts.length - 1; i++) {
-    const currentPart = excavatorParts[i];
-    const nextPart = excavatorParts[i + 1];
-
-    // 只在两个部件都显示时才绘制连接点
-    if (!partsVisibility[currentPart.part] || !partsVisibility[nextPart.part]) {
-      continue;
-    }
-
-    // ----- 第一个点：当前部件的next_anchor在全局坐标中的位置 -----
-
-    // 1. 按照与calcNextAnchor完全相同的逻辑计算
-    const currentRotateRad = (currentPart.rotate * Math.PI) / 180;
-
-    // 2. 从rotate_anchor到next_anchor的相对向量
-    // 与calcNextAnchor函数里的逻辑保持一致
-    const translatedPoint = [
-      (currentPart.next_anchor[0] - currentPart.rotate_anchor[0]) *
-        currentPart.size[0],
-      (currentPart.rotate_anchor[1] - currentPart.next_anchor[1]) *
-        currentPart.size[1], // 翻转Y
-    ];
-
-    // 3. 应用旋转变换
-    const rotatedPoint = [
-      translatedPoint[0] * Math.cos(currentRotateRad) -
-        translatedPoint[1] * Math.sin(currentRotateRad),
-      translatedPoint[0] * Math.sin(currentRotateRad) +
-        translatedPoint[1] * Math.cos(currentRotateRad),
-    ];
-
-    // 4. 计算全局next_anchor位置
-    const globalNextAnchor = {
-      x: rotatedPoint[0] + currentPart.rotate_anchor_pos[0] + globalOffset.x,
-      y: rotatedPoint[1] + currentPart.rotate_anchor_pos[1] + globalOffset.y,
-    };
-
-    // ----- 第二个点：下一个部件的rotate_anchor_pos在全局坐标中的位置 -----
-    const nextGlobalAnchor = {
-      x: nextPart.rotate_anchor_pos[0] + globalOffset.x,
-      y: nextPart.rotate_anchor_pos[1] + globalOffset.y,
-    };
-
-    // ----- 绘制两个点和连线 -----
-
-    // 绘制当前部件的next_anchor点（蓝色圆点）
-    ctx.save();
-    ctx.fillStyle = "blue";
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(globalNextAnchor.x, globalNextAnchor.y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // 添加标签
-    ctx.fillStyle = "black";
-    ctx.font = "9px Arial";
-    ctx.fillText(
-      `${currentPart.part} next`,
-      globalNextAnchor.x + 8,
-      globalNextAnchor.y - 3
-    );
-    ctx.restore();
-
-    // 绘制下一个部件的rotate_anchor_pos点（紫色圆点）
-    ctx.save();
-    ctx.fillStyle = "purple";
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(nextGlobalAnchor.x, nextGlobalAnchor.y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // 添加标签
-    ctx.fillStyle = "black";
-    ctx.font = "9px Arial";
-    ctx.fillText(
-      `${nextPart.part} anchor`,
-      nextGlobalAnchor.x + 8,
-      nextGlobalAnchor.y + 12
-    );
-    ctx.restore();
-
-    // 计算两点间的距离
-    const dx = nextGlobalAnchor.x - globalNextAnchor.x;
-    const dy = nextGlobalAnchor.y - globalNextAnchor.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // 如果距离超过1像素，显示红色虚线和距离
-    if (distance > 1) {
-      ctx.save();
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 2]);
-      ctx.beginPath();
-      ctx.moveTo(globalNextAnchor.x, globalNextAnchor.y);
-      ctx.lineTo(nextGlobalAnchor.x, nextGlobalAnchor.y);
-      ctx.stroke();
-
-      // 显示距离
-      const midX = (globalNextAnchor.x + nextGlobalAnchor.x) / 2;
-      const midY = (globalNextAnchor.y + nextGlobalAnchor.y) / 2;
-      ctx.fillStyle = "red";
-      ctx.font = "bold 10px Arial";
-      ctx.fillText(`${distance.toFixed(1)}px`, midX, midY - 5);
-      ctx.restore();
-
-      // 输出详细的坐标信息用于调试
-      console.log(`连接点不匹配: ${currentPart.part} -> ${nextPart.part}`);
-      console.log(
-        `  ${currentPart.part} 的next_anchor:`,
-        currentPart.next_anchor
-      );
-      console.log(
-        `  ${currentPart.part} 的rotate_anchor:`,
-        currentPart.rotate_anchor
-      );
-      console.log(`  计算的next_anchor全局坐标:`, globalNextAnchor);
-      console.log(
-        `  ${nextPart.part} 的rotate_anchor_pos:`,
-        nextPart.rotate_anchor_pos
-      );
-      console.log(
-        `  ${nextPart.part} rotate_anchor_pos的全局坐标:`,
-        nextGlobalAnchor
-      );
-      console.log(`  差距: ${distance.toFixed(2)}px`);
-    } else {
-      // 点对齐了，显示绿色的勾
-      ctx.save();
-      ctx.fillStyle = "green";
-      ctx.font = "bold 10px Arial";
-      ctx.fillText("✓", globalNextAnchor.x + 8, globalNextAnchor.y + 3);
-      ctx.restore();
-    }
-  }
-} // 挖掘机渲染器 - 修正版
-// 完全遵循Rust实现的逻辑，正确处理坐标系
-
-// 全局变量
-let excavatorParts = []; // 挖掘机部件
-let excavatorImages = {}; // 挖掘机图片
-let globalOffset = { x: 200, y: -80 }; // 全局偏移，对应Rust中的trans
-let debugMode = false; // 调试模式
-let partsVisibility = {
-  // 部件显示状态
-  body: true,
-  boom: true,
-  arm: true,
-  bucket: true,
-};
-let originalAnchors = []; // 存储原始锚点设置
-let groundLine = { start: { x: 0, y: 0 }, end: { x: 0, y: 0 } }; // 地面线坐标
-
-// HTML模板
+// --- HTML Generation ---
 function getExcavatorRendererHTML() {
+  // HTML structure unchanged
   return `
     <div class="card">
       <h2>挖掘机侧视图渲染器</h2>
-      
-      <div style="display: flex; flex-direction: row;">
-        <div style="flex: 1;">
-          <canvas id="excavator-canvas" width="720" height="560" style="border: 1px solid #ddd; background-color: #f8f8f8;"></canvas>
+      <div class="excavator-layout">
+        <div class="excavator-canvas-container">
+          <canvas id="excavator-canvas" width="720" height="560"></canvas>
         </div>
-        <div style="width: 400px; padding-left: 20px;">
-          <h3>控制</h3>
-          
-          <div class="control-section">
-            <div class="section-header">
-              <h4>角度控制</h4>
-            </div>
-            
-            <div>
-              <label for="cab-rotate">驾驶舱角度:</label>
-              <input type="range" id="cab-rotate" min="-30" max="30" value="0" step="1">
-              <span id="cab-angle-value">0°</span>
-              <input type="checkbox" id="show-body" checked>
-              <label for="show-body">显示</label>
-            </div>
-            
-            <div style="margin-top: 15px;">
-              <label for="boom-rotate">大臂角度:</label>
-              <input type="range" id="boom-rotate" min="0" max="60" value="30" step="1">
-              <span id="boom-angle-value">30°</span>
-              <input type="checkbox" id="show-boom" checked>
-              <label for="show-boom">显示</label>
-            </div>
-            
-            <div style="margin-top: 15px;">
-              <label for="arm-rotate">小臂角度:</label>
-              <input type="range" id="arm-rotate" min="0" max="90" value="45" step="1">
-              <span id="arm-angle-value">45°</span>
-              <input type="checkbox" id="show-arm" checked>
-              <label for="show-arm">显示</label>
-            </div>
-            
-            <div style="margin-top: 15px;">
-              <label for="bucket-rotate">铲斗角度:</label>
-              <input type="range" id="bucket-rotate" min="0" max="70" value="35" step="1">
-              <span id="bucket-angle-value">35°</span>
-              <input type="checkbox" id="show-bucket" checked>
-              <label for="show-bucket">显示</label>
-            </div>
-          </div>
-          
-          <!-- 添加测量信息区域 -->
-          <div class="control-section" style="margin-top: 20px;">
-            <div class="section-header">
-              <h4>部件长度测量</h4>
-            </div>
-            <div id="part-measurements" style="background: #f5f5f5; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
-              <!-- 这里将通过JavaScript动态填充测量数据 -->
-            </div>
-          </div>
-          
-          <div class="control-section" style="margin-top: 20px;">
-            <div class="section-header">
-              <h4>锚点设置</h4>
-              <select id="anchor-part">
-                <option value="body">驾驶舱</option>
-                <option value="boom">大臂</option>
-                <option value="arm">小臂</option>
-                <option value="bucket">铲斗</option>
-              </select>
-            </div>
-            
-            <div style="margin-top: 10px;">
-              <h5>旋转锚点 (rotate_anchor)</h5>
-              <div>
-                <label>X: </label>
-                <input type="number" id="rotate-anchor-x" step="0.01" style="width: 70px;">
-                <label style="margin-left: 15px;">Y: </label>
-                <input type="number" id="rotate-anchor-y" step="0.01" style="width: 70px;">
-                <button id="update-rotate-anchor" style="margin-left: 10px;">更新</button>
-              </div>
-            </div>
-            
-            <div style="margin-top: 15px;">
-              <h5>连接点 (next_anchor)</h5>
-              <div>
-                <label>X: </label>
-                <input type="number" id="next-anchor-x" step="0.01" style="width: 70px;">
-                <label style="margin-left: 15px;">Y: </label>
-                <input type="number" id="next-anchor-y" step="0.01" style="width: 70px;">
-                <button id="update-next-anchor" style="margin-left: 10px;">更新</button>
-              </div>
-            </div>
-          </div>
-          
-          <div style="margin-top: 30px;">
-            <button onclick="resetExcavator()">重置位置</button>
-            <button onclick="toggleDebugMode()" style="margin-left: 10px;">调试模式</button>
-            <button onclick="applyCurrentAnchors()" style="margin-left: 10px;">应用当前锚点</button>
-          </div>
+        <div class="excavator-controls">
+          <h3>控制面板</h3>
+          <fieldset class="control-section">
+            <legend><h4>角度控制</h4></legend>
+            <div class="slider-group"> <label for="cab-rotate">车身旋转:</label> <input type="range" id="cab-rotate" min="-30" max="30" value="0" step="1"> <span id="cab-angle-value" class="value-display">0° abs</span> <div class="checkbox-group"><input type="checkbox" id="show-body" checked></div> </div>
+            <div class="slider-group"> <label for="boom-rotate">大臂:</label> <input type="range" id="boom-rotate" min="0" max="115" value="55" step="1"> <span id="boom-angle-value" class="value-display">?° rel</span> <div class="checkbox-group"><input type="checkbox" id="show-boom" checked></div> </div>
+            <div class="slider-group"> <label for="arm-rotate">小臂:</label> <input type="range" id="arm-rotate" min="0" max="180" value="90" step="1"> <span id="arm-angle-value" class="value-display">?° rel</span> <div class="checkbox-group"><input type="checkbox" id="show-arm" checked></div> </div>
+            <div class="slider-group"> <label for="bucket-rotate">铲斗:</label> <input type="range" id="bucket-rotate" min="0" max="180" value="90" step="1"> <span id="bucket-angle-value" class="value-display">?° rel</span> <div class="checkbox-group"><input type="checkbox" id="show-bucket" checked></div> </div>
+          </fieldset>
+          <fieldset class="control-section">
+            <legend><h4>真实尺寸比例调整 (单位: mm)</h4></legend>
+            <div class="form-group"> <label for="real-body-height" title="挖机旋转中心到地面的垂直距离">(参考)车身高:</label> <input type="number" id="real-body-height" placeholder="例如: 5230" /> </div>
+            <div class="form-group"> <label for="real-body-boom" title="车身转轴到大臂转轴距离">车身-大臂:</label> <input type="number" id="real-body-boom" placeholder="例如: 260" /> </div>
+            <div class="form-group"> <label for="real-boom-arm" title="大臂转轴到小臂转轴距离">大臂-小臂:</label> <input type="number" id="real-boom-arm" placeholder="例如: 7000" /> </div>
+            <div class="form-group"> <label for="real-arm-bucket" title="小臂转轴到铲斗转轴距离">小臂-铲斗:</label> <input type="number" id="real-arm-bucket" placeholder="例如: 2600" /> </div>
+            <div class="form-group"> <label for="real-bucket-tip" title="铲斗转轴到铲斗尖距离">铲斗轴-尖:</label> <input type="number" id="real-bucket-tip" placeholder="例如: 2230" /> </div>
+            <div style="margin-bottom: 10px;"> <button id="apply-scale-button">应用比例</button> <button onclick="resetSizesToOriginal()">重置尺寸</button> </div>
+            <div id="scale-ratios-display" class="result-area" style="font-size: 0.9em; line-height: 1.4;"> 应用比例后将在此显示各部件缩放比 (以车身原始尺寸=1为基准)。 </div>
+          </fieldset>
+          <fieldset class="control-section">
+            <legend><h4>部件渲染长度 & 比例对比</h4></legend>
+            <div id="part-measurements">初始化中...</div>
+          </fieldset>
+          <fieldset class="control-section">
+            <legend><h4>锚点设置 (高级)</h4></legend>
+            <div class="form-group"> <label for="anchor-part">选择部件:</label> <select id="anchor-part"> <option value="body">驾驶舱</option><option value="boom">大臂</option><option value="arm">小臂</option><option value="bucket">铲斗</option> </select> </div> <div class="anchor-controls"> <h5>旋转锚点 (rotate_anchor)</h5> <div class="anchor-input-group"><label>X:</label><input type="number" id="rotate-anchor-x" step="0.01" class="short-input"><label>Y:</label><input type="number" id="rotate-anchor-y" step="0.01" class="short-input"><button id="update-rotate-anchor">更新</button></div> </div> <div class="anchor-controls"> <h5>连接点 (next_anchor)</h5> <div class="anchor-input-group"><label>X:</label><input type="number" id="next-anchor-x" step="0.01" class="short-input"><label>Y:</label><input type="number" id="next-anchor-y" step="0.01" class="short-input"><button id="update-next-anchor">更新</button></div> </div>
+          </fieldset>
+          <div class="button-group control-section"> <button onclick="resetExcavator()">重置视图</button> <button onclick="toggleDebugMode()">连接点</button> <button onclick="applyCurrentAnchors()">复制锚点</button> </div>
         </div>
       </div>
     </div>
   `;
 }
 
-// 切换调试模式
-function toggleDebugMode() {
-  debugMode = !debugMode;
-  renderExcavator();
-}
-
-// 初始化挖掘机渲染器
+// --- Initialization and Setup ---
 async function initExcavatorRenderer() {
-  try {
-    // 加载配置
-    const response = await fetch("./assets/config.json");
-    const config = await response.json();
+    try {
+        const response = await fetch("./assets/config.json");
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const config = await response.json();
+        originalConfigData = JSON.parse(JSON.stringify(config));
+        excavatorParts = JSON.parse(JSON.stringify(config));
 
-    // 使用Rust代码中的原始值初始化部件
-    excavatorParts = [
-      {
-        part: "body",
-        size: [215.0, 147.0],
-        rotate_anchor: [0.0, 0.0],
-        rotate_anchor_pos: [0.0, 0.0],
-        next_anchor: [-0.18, 0.14],
-        rotate: 0.0,
-        center: [0.0, 0.0],
-      },
-      {
-        part: "boom",
-        size: [236.0, 166.0],
-        rotate_anchor: [0.44, 0.44], // 注意：这里是右下角
-        rotate_anchor_pos: [0.0, 0.0],
-        next_anchor: [-0.44, -0.42], // 注意：这里是左上角
-        rotate: 0.0,
-        center: [0.0, 0.0],
-      },
-      {
-        part: "arm",
-        size: [32.0, 163.0],
-        rotate_anchor: [0.0, 0.4], // 注意：这里是上边中点
-        rotate_anchor_pos: [0.0, 0.0],
-        next_anchor: [0.0, -0.45], // 注意：这里是下边中点
-        rotate: 0.0,
-        center: [0.0, 0.0],
-      },
-      {
-        part: "bucket",
-        size: [74.0, 74.0],
-        rotate_anchor: [-0.16, 0.38], // 注意：这里是左上方
-        rotate_anchor_pos: [0.0, 0.0],
-        next_anchor: [0.476, -0.44], // 注意：这里是右下方
-        rotate: 0.0,
-        center: [0.0, 0.0],
-      },
-    ];
+        globalOffset = { x: 200, y: -80 };
+        debugMode = false;
+        partsVisibility = { body: true, boom: true, arm: true, bucket: true };
+        originalAnchors = [];
+        originalSizes = {};
+        originalScales = {};
 
-    // 备份原始锚点设置
-    originalAnchors = excavatorParts.map((part) => ({
-      part: part.part,
-      rotate_anchor: [...part.rotate_anchor],
-      next_anchor: [...part.next_anchor],
-    }));
-
-    console.log("使用的部件配置:", excavatorParts);
-
-    // 加载图片
-    await Promise.all(
-      excavatorParts.map(async (partConfig) => {
-        const img = new Image();
-        const partName = partConfig.part;
-        img.src = `./assets/${partName}.png`;
-
-        return new Promise((resolve) => {
-          img.onload = () => {
-            excavatorImages[partName] = img;
-            resolve();
-          };
+        originalConfigData.forEach(partConfig => {
+            const partName = partConfig.part;
+            originalAnchors.push({ part: partName, rotate_anchor: [...partConfig.rotate_anchor], next_anchor: [...partConfig.next_anchor], });
+            originalSizes[partName] = [...partConfig.size];
+            const configScale = partConfig.scale ?? 1.0;
+            originalScales[partName] = configScale;
+            const currentPart = excavatorParts.find(p => p.part === partName);
+            if(currentPart) {
+                 currentPart.size = [partConfig.size[0] * configScale, partConfig.size[1] * configScale];
+                 currentPart.originalScale = configScale;
+            }
         });
-      })
-    );
 
-    // 设置初始位置
-    setupExcavator();
+        await Promise.all(
+          excavatorParts.map(async (partConfig) => {
+            const img = new Image(); img.src = `./assets/${partConfig.part}.png`; return new Promise((resolve, reject) => { img.onload = () => { excavatorImages[partConfig.part] = img; resolve(); }; img.onerror = (err) => { console.error(`Error loading image for ${partConfig.part}:`, err); reject(err); }; });
+          })
+        );
+        setupExcavator();
+        setupControlEvents();
+        updateExcavatorAngles();
 
-    // 添加事件监听器
-    setupControlEvents();
-
-    // 渲染初始视图
-    renderExcavator();
-  } catch (error) {
-    console.error("Error initializing excavator renderer:", error);
-  }
+      } catch (error) {
+        // Log the actual error causing the catch block to execute
+        console.error("初始化挖掘机渲染器时出错:", error);
+        const pageContent = document.getElementById('page-content');
+        if (pageContent) {
+            // Display the specific error message to the user
+            pageContent.innerHTML = `<div class="card error"><p>加载挖掘机配置或图像失败: ${error.message}。请检查控制台和文件路径。</p></div>`;
+        }
+      }
 }
 
-// 设置挖掘机初始位置
 function setupExcavator() {
-  const canvas = document.getElementById("excavator-canvas");
-  const centerX = canvas.width / 3;
-  const centerY = canvas.height / 2 + 50;
-
-  // 设置主体部分的初始位置
-  excavatorParts[0].rotate_anchor_pos = [centerX, centerY];
-  excavatorParts[0].center = [centerX, centerY]; // 对于主体，中心就是旋转锚点位置
-
-  // 计算其他部件的位置
-  updatePartsPositions();
+    const canvas = document.getElementById("excavator-canvas"); if (!canvas || !excavatorParts || excavatorParts.length === 0) { console.error("Canvas element or parts data missing for setup."); return; } const centerX = canvas.width / 3; const centerY = canvas.height / 2 + 80; const bodyPart = excavatorParts.find(p => p.part === 'body'); if(bodyPart && bodyPart.rotate_anchor_pos) { bodyPart.rotate_anchor_pos = [centerX, centerY]; } else { console.error("Body part not found or missing rotate_anchor_pos"); }
 }
 
-// 更新所有部件的位置
-function updatePartsPositions() {
-  // 从Rust代码中的update_center方法，对每个部件执行calc_next_anchor
-  for (let idx = 0; idx < excavatorParts.length - 1; idx++) {
-    calcNextAnchor(idx);
-  }
-
-  // 更新测量信息显示
-  updatePartMeasurements();
-}
-
-// 严格按照Rust代码实现的calc_next_anchor函数
-// 这个函数的目的是计算下一个部件的旋转点和中心位置
-function calcNextAnchor(idx) {
-  const currentPart = excavatorParts[idx];
-  const nextPart = excavatorParts[idx + 1];
-
-  // 1. 将角度转换为弧度
-  const currentRotateRad = (currentPart.rotate * Math.PI) / 180;
-
-  // 2. 计算从rotate_anchor到next_anchor的相对向量
-  // 特别注意: 在图片坐标系中，Y轴向上为正，但Canvas坐标系Y轴向下为正，需要翻转Y分量
-  const translatedPoint = [
-    (currentPart.next_anchor[0] - currentPart.rotate_anchor[0]) *
-      currentPart.size[0],
-    (currentPart.rotate_anchor[1] - currentPart.next_anchor[1]) *
-      currentPart.size[1], // 翻转Y
-  ];
-
-  // 3. 应用旋转变换
-  const rotatedPoint = [
-    translatedPoint[0] * Math.cos(currentRotateRad) -
-      translatedPoint[1] * Math.sin(currentRotateRad),
-    translatedPoint[0] * Math.sin(currentRotateRad) +
-      translatedPoint[1] * Math.cos(currentRotateRad),
-  ];
-
-  // 4. 计算全局next_anchor位置
-  const nextAnchorPos = [
-    rotatedPoint[0] + currentPart.rotate_anchor_pos[0],
-    rotatedPoint[1] + currentPart.rotate_anchor_pos[1],
-  ];
-
-  // 5. 更新下一个部件的rotate_anchor_pos
-  nextPart.rotate_anchor_pos = nextAnchorPos;
-
-  // 6. 为下一个部件计算中心点
-  const nextRotateRad = (nextPart.rotate * Math.PI) / 180;
-  const nextTranslatedPoint = [
-    -nextPart.rotate_anchor[0] * nextPart.size[0],
-    nextPart.rotate_anchor[1] * nextPart.size[1], // 应用Y翻转
-  ];
-
-  // 7. 应用旋转变换
-  const nextRotatedPoint = [
-    nextTranslatedPoint[0] * Math.cos(nextRotateRad) -
-      nextTranslatedPoint[1] * Math.sin(nextRotateRad),
-    nextTranslatedPoint[0] * Math.sin(nextRotateRad) +
-      nextTranslatedPoint[1] * Math.cos(nextRotateRad),
-  ];
-
-  // 8. 计算中心点
-  nextPart.center = [
-    nextRotatedPoint[0] + nextAnchorPos[0],
-    nextRotatedPoint[1] + nextAnchorPos[1],
-  ];
-
-  if (debugMode) {
-    console.log(
-      `[${idx}] ${currentPart.part} -> [${idx + 1}] ${nextPart.part}`
-    );
-    console.log(
-      `  current_rotate:`,
-      currentPart.rotate,
-      "°, radians:",
-      currentRotateRad
-    );
-    console.log(`  current_anchor:`, currentPart.rotate_anchor);
-    console.log(`  current_next_anchor:`, currentPart.next_anchor);
-    console.log(`  translated_point:`, translatedPoint);
-    console.log(`  rotated_point:`, rotatedPoint);
-    console.log(`  next_anchor_pos:`, nextAnchorPos);
-    console.log(`  next_part.rotate_anchor:`, nextPart.rotate_anchor);
-    console.log(`  next_translated_point:`, nextTranslatedPoint);
-    console.log(`  next_rotated_point:`, nextRotatedPoint);
-    console.log(`  next_center:`, nextPart.center);
-  }
-}
-
-// 计算铲斗头部位置
-function calcBucketHeadPos() {
-  const bucketPart = excavatorParts[3]; // 铲斗是第4个部件（索引3）
-
-  // 获取基于next_anchor的偏移
-  const offset = {
-    x: bucketPart.next_anchor[0] * bucketPart.size[0],
-    y: -bucketPart.next_anchor[1] * bucketPart.size[1], // 翻转Y
-  };
-
-  // 应用旋转
-  const bucketRotateRad = (bucketPart.rotate * Math.PI) / 180;
-  const rotatedOffset = {
-    x:
-      offset.x * Math.cos(bucketRotateRad) -
-      offset.y * Math.sin(bucketRotateRad),
-    y:
-      offset.x * Math.sin(bucketRotateRad) +
-      offset.y * Math.cos(bucketRotateRad),
-  };
-
-  // 计算最终位置
-  return {
-    x: bucketPart.center[0] + rotatedOffset.x,
-    y: bucketPart.center[1] + rotatedOffset.y,
-  };
-}
-
-// 渲染挖掘机
-function renderExcavator() {
-  const canvas = document.getElementById("excavator-canvas");
-  const ctx = canvas.getContext("2d");
-
-  // 清除画布
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // 获取机身部件和旋转角度
-  const bodyPart = excavatorParts.find((p) => p.part === "body");
-  const bodyRotateRad = (bodyPart.rotate * Math.PI) / 180; // 转换为弧度
-
-  // 计算旋转中心到机身底部的距离
-  const h = bodyPart.size[1] / 2; // 旋转中心到机身底部的距离
-
-  // 计算旋转中心在下边沿上的垂直落点
-  const rotationCenterX = bodyPart.rotate_anchor_pos[0] + globalOffset.x;
-  const rotationCenterY = bodyPart.rotate_anchor_pos[1] + globalOffset.y;
-
-  // 使用公式计算地面线的起点和终点
-  // 地面线应该通过点(rotationCenterX - h*sin(bodyRotateRad), rotationCenterY + h*cos(bodyRotateRad))
-  // 这个点就是机身底部与地面的接触点
-  const groundPointX = rotationCenterX - h * Math.sin(bodyRotateRad);
-  const groundPointY = rotationCenterY + h * Math.cos(bodyRotateRad);
-
-  // 更新chassisLevel为地面线的高度，这样只会有一条线
-  // 计算地面线的方向向量（平行于机身底部）
-  const groundLineAngle = bodyRotateRad; // 平行于机身底部
-  const lineLength = canvas.width * 2; // 足够长的线
-
-  // 计算地面线的起点和终点
-  const startX = groundPointX - (Math.cos(groundLineAngle) * lineLength) / 2;
-  const startY = groundPointY - (Math.sin(groundLineAngle) * lineLength) / 2;
-  const endX = groundPointX + (Math.cos(groundLineAngle) * lineLength) / 2;
-  const endY = groundPointY + (Math.sin(groundLineAngle) * lineLength) / 2;
-
-  groundLine.start = { x: startX, y: startY };
-  groundLine.end = { x: endX, y: endY };
-
-  // 绘制地面线
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(startX, startY);
-  ctx.lineTo(endX, endY);
-  ctx.strokeStyle = "#8B4513"; // 深棕色
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // 绘制地面纹理（沿着地面线方向）
-  const textureSpacing = 20; // 纹理间距
-  const textureLength = 10; // 纹理长度
-
-  // 计算纹理的方向向量（与地面线呈现固定夹角）
-  const textureAngle = bodyRotateRad + Math.PI / 4; // 45度夹角
-  const textureVectorX = Math.cos(textureAngle);
-  const textureVectorY = Math.sin(textureAngle);
-
-  // 计算纹理的数量
-  const textureCount = Math.floor(lineLength / textureSpacing);
-
-  // 确保纹理均匀分布在地面线上
-  for (let i = 0; i < textureCount; i++) {
-    // 计算纹理在地面线上的位置（均匀分布）
-    const t = i / (textureCount - 1); // 归一化参数 [0,1]
-    const posX = startX + t * (endX - startX);
-    const posY = startY + t * (endY - startY);
-
-    ctx.beginPath();
-    ctx.moveTo(posX, posY);
-    ctx.lineTo(
-      posX + textureLength * textureVectorX,
-      posY + textureLength * textureVectorY
-    );
-    ctx.strokeStyle = "#A0522D"; // 棕色
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  // 添加地面线标签
-  ctx.font = "12px Arial";
-  ctx.fillStyle = "#8B4513";
-  ctx.fillText("地面线", groundPointX + 15, groundPointY - 5);
-  ctx.restore();
-
-  // 按照正确的顺序绘制部件（先背景部件，后前景部件）
-  const renderOrder = ["body", "boom", "arm", "bucket"];
-
-  for (let i = 0; i < renderOrder.length; i++) {
-    const partName = renderOrder[i];
-    const part = excavatorParts.find((p) => p.part === partName);
-
-    // 检查部件是否应该显示
-    if (part && excavatorImages[partName] && partsVisibility[partName]) {
-      drawPart(ctx, part, excavatorImages[partName]);
-    }
-  }
-
-  // 绘制铲斗头部位置标记 (当铲斗显示时)
-  if (partsVisibility.bucket) {
-    const headPos = calcBucketHeadPos();
-    ctx.save();
-    ctx.fillStyle = "#FF6600"; // 橙色
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(
-      headPos.x + globalOffset.x,
-      headPos.y + globalOffset.y,
-      7,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // 在全局坐标系中绘制连接点，用于检查对齐情况
-  if (debugMode) {
-    drawConnectionPoints(ctx);
-    // 完全移除高度线绘制，只保留地面线
-  }
-
-  // 调试模式下显示额外信息
-  if (debugMode) {
-    drawDebugInfo(ctx, headPos);
-  }
-
-  // 始终更新测量信息显示（无论是否在调试模式）
-  updatePartMeasurements();
-}
-
-// 绘制单个部件
-function drawPart(ctx, part, image) {
-  ctx.save();
-
-  // 移动到旋转锚点位置（应用全局偏移）
-  ctx.translate(
-    part.rotate_anchor_pos[0] + globalOffset.x,
-    part.rotate_anchor_pos[1] + globalOffset.y
-  );
-
-  // 旋转
-  ctx.rotate((part.rotate * Math.PI) / 180);
-
-  // 计算图片的尺寸
-  const width = part.size[0];
-  const height = part.size[1];
-
-  // 计算图片左上角的位置
-  // 在图片坐标系中，左上角是(-0.5, 0.5)，原点(0,0)在中心
-  // 从旋转锚点到左上角的向量是：(-0.5-rotate_anchor[0], 0.5-rotate_anchor[1])
-  // 由于Canvas坐标系Y轴向下为正，与图片坐标系Y轴向上为正相反，
-  // 所以Y轴方向需要取反，变成(0.5-rotate_anchor[1])取负 -> (rotate_anchor[1]-0.5)
-  const offsetX = (-0.5 - part.rotate_anchor[0]) * width;
-  const offsetY = (part.rotate_anchor[1] - 0.5) * height;
-
-  // 调试信息
-  if (debugMode) {
-    console.log(`绘制 ${part.part}:`);
-    console.log(
-      `  rotate_anchor: [${part.rotate_anchor[0]}, ${part.rotate_anchor[1]}]`
-    );
-    console.log(`  size: [${width}, ${height}]`);
-    console.log(`  offsetX: ${offsetX}, offsetY: ${offsetY}`);
-  }
-
-  // 绘制图片
-  ctx.drawImage(image, offsetX, offsetY, width, height);
-
-  // 调试模式下绘制辅助线和点
-  if (debugMode) {
-    drawDebugPoints(ctx, part, width, height, offsetX, offsetY);
-  }
-
-  ctx.restore();
-}
-
-// 绘制调试点
-function drawDebugPoints(ctx, part, width, height, offsetX, offsetY) {
-  // 绘制旋转锚点（红色）
-  ctx.fillStyle = "red";
-  ctx.beginPath();
-  ctx.arc(0, 0, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 绘制图片中心（黄色）
-  // 中心相对于旋转锚点的向量：-rotate_anchor * size
-  // 在转换到Canvas坐标系时，需要对Y轴取反
-  const centerX = -part.rotate_anchor[0] * width;
-  const centerY = part.rotate_anchor[1] * height; // Y轴方向取反（这是关键）
-  ctx.fillStyle = "yellow";
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 绘制下一个锚点（绿色）
-  // next_anchor相对于rotate_anchor的向量：(next_anchor - rotate_anchor) * size
-  // 在转换到Canvas坐标系时，需要对Y轴取反
-  const nextAnchorX = (part.next_anchor[0] - part.rotate_anchor[0]) * width;
-  const nextAnchorY = (part.rotate_anchor[1] - part.next_anchor[1]) * height; // Y轴方向取反（修正）
-
-  ctx.fillStyle = "green";
-  ctx.beginPath();
-  ctx.arc(nextAnchorX, nextAnchorY, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 显示坐标（调试用）
-  if (debugMode) {
-    ctx.fillStyle = "black";
-    ctx.font = "9px Arial";
-    ctx.fillText(
-      `(${nextAnchorX.toFixed(0)},${nextAnchorY.toFixed(0)})`,
-      nextAnchorX + 5,
-      nextAnchorY - 5
-    );
-  }
-
-  // 绘制边界框
-  ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(offsetX, offsetY, width, height);
-
-  // 显示部件名称
-  ctx.fillStyle = "black";
-  ctx.font = "10px Arial";
-  ctx.fillText(part.part, 10, 10);
-  ctx.fillText(`rotate: ${part.rotate.toFixed(1)}°`, 10, 25);
-}
-
-// 绘制调试信息
-function drawDebugInfo(ctx, headPos) {
-  ctx.save();
-  ctx.font = "12px monospace";
-  ctx.fillStyle = "#000";
-
-  let y = 20;
-  const x = 10;
-  const lineHeight = 16;
-
-  // 显示角度信息
-  ctx.fillText(`调试模式开启`, x, y);
-  y += lineHeight;
-
-  // 计算相对角度
-  const cabSlider = document.getElementById("cab-rotate");
-  const boomSlider = document.getElementById("boom-rotate");
-  const armSlider = document.getElementById("arm-rotate");
-  const bucketSlider = document.getElementById("bucket-rotate");
-
-  const cabRelative = parseInt(cabSlider.value);
-  const boomRelative = parseInt(boomSlider.value);
-  const armRelative = parseInt(armSlider.value);
-  const bucketRelative = parseInt(bucketSlider.value);
-
-  ctx.fillText(
-    `驾驶舱: ${cabRelative}° (绝对: ${excavatorParts[0].rotate.toFixed(1)}°)`,
-    x,
-    y
-  );
-  y += lineHeight;
-  ctx.fillText(
-    `大臂: ${boomRelative}° (绝对: ${excavatorParts[1].rotate.toFixed(1)}°)`,
-    x,
-    y
-  );
-  y += lineHeight;
-  ctx.fillText(
-    `小臂: ${armRelative}° (绝对: ${excavatorParts[2].rotate.toFixed(1)}°)`,
-    x,
-    y
-  );
-  y += lineHeight;
-  ctx.fillText(
-    `铲斗: ${bucketRelative}° (绝对: ${excavatorParts[3].rotate.toFixed(1)}°)`,
-    x,
-    y
-  );
-  y += lineHeight * 1.5;
-
-  // 显示铲斗头部位置（当铲斗显示时）
-  if (partsVisibility.bucket) {
-    ctx.fillText(
-      `铲斗头部位置: (${headPos.x.toFixed(1)}, ${headPos.y.toFixed(1)})`,
-      x,
-      y
-    );
-  } else {
-    ctx.fillText(`铲斗未显示`, x, y);
-  }
-  y += lineHeight * 1.5;
-
-  // 计算并显示部件长度比例
-  const partRatios = calculatePartsRatio();
-  const bodyHeight = partRatios.bodyHeight;
-
-  ctx.fillText(`部件长度分析`, x, y);
-  y += lineHeight;
-  ctx.fillText(`基准单位(车身到地面): ${bodyHeight.toFixed(1)}px`, x, y);
-  y += lineHeight;
-  ctx.fillText(`地面线高度: ${groundLine.start.y.toFixed(1)}px`, x, y);
-  y += lineHeight;
-
-  for (let i = 0; i < excavatorParts.length; i++) {
-    const part = excavatorParts[i];
-    const info = partRatios.ratios[part.part];
-
-    // 只显示激活的部件信息
-    if (partsVisibility[part.part]) {
-      const height = calculateHeightToChassis(part).toFixed(1);
-      ctx.fillText(
-        `${part.part}: ${info.pixelDistance.toFixed(
-          1
-        )}px (比例: ${info.ratio.toFixed(2)}, 高度: ${height}px)`,
-        x,
-        y
-      );
-      y += lineHeight;
-    }
-  }
-  y += lineHeight;
-
-  // 显示各部件的rotate_anchor_pos和center
-  ctx.fillText(`部件位置信息:`, x, y);
-  y += lineHeight;
-
-  for (let i = 0; i < excavatorParts.length; i++) {
-    const part = excavatorParts[i];
-
-    // 只显示已启用的部件信息
-    if (partsVisibility[part.part]) {
-      ctx.fillText(
-        `${part.part} anchor_pos: (${part.rotate_anchor_pos[0].toFixed(
-          1
-        )}, ${part.rotate_anchor_pos[1].toFixed(1)})`,
-        x,
-        y
-      );
-      y += lineHeight;
-      ctx.fillText(
-        `${part.part} center: (${part.center[0].toFixed(
-          1
-        )}, ${part.center[1].toFixed(1)})`,
-        x,
-        y
-      );
-      y += lineHeight;
-    } else {
-      ctx.fillText(`${part.part}: 未显示`, x, y);
-      y += lineHeight;
-    }
-  }
-  y += lineHeight;
-
-  // 显示颜色图例
-  ctx.fillStyle = "red";
-  ctx.fillRect(x, y, 10, 10);
-  ctx.fillStyle = "#000";
-  ctx.fillText(`  - 红色点: 旋转锚点 (rotate_anchor)`, x + 15, y + 8);
-  y += lineHeight;
-
-  ctx.fillStyle = "green";
-  ctx.fillRect(x, y, 10, 10);
-  ctx.fillStyle = "#000";
-  ctx.fillText(`  - 绿色点: 下一个部件连接点 (next_anchor)`, x + 15, y + 8);
-  y += lineHeight;
-
-  ctx.fillStyle = "yellow";
-  ctx.fillRect(x, y, 10, 10);
-  ctx.fillStyle = "#000";
-  ctx.fillText(`  - 黄色点: 图片中心点`, x + 15, y + 8);
-  y += lineHeight;
-
-  ctx.fillStyle = "#FF6600";
-  ctx.fillRect(x, y, 10, 10);
-  ctx.fillStyle = "#000";
-  ctx.fillText(`  - 橙色点: 铲斗末端点`, x + 15, y + 8);
-  y += lineHeight;
-
-  ctx.fillStyle = "#4682B4";
-  ctx.fillRect(x, y, 10, 10);
-  ctx.fillStyle = "#000";
-  ctx.fillText(`  - 蓝色虚线: 到底盘高度`, x + 15, y + 8);
-
-  ctx.restore();
-
-  // 绘制全局偏移点
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(globalOffset.x, globalOffset.y, 5, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255, 0, 255, 0.5)";
-  ctx.fill();
-  ctx.restore();
-}
-
-// 更新挖掘机角度
-function updateExcavatorAngles() {
-  const cabRotate = document.getElementById("cab-rotate");
-  const boomRotate = document.getElementById("boom-rotate");
-  const armRotate = document.getElementById("arm-rotate");
-  const bucketRotate = document.getElementById("bucket-rotate");
-
-  const cabAngleValue = document.getElementById("cab-angle-value");
-  const boomAngleValue = document.getElementById("boom-angle-value");
-  const armAngleValue = document.getElementById("arm-angle-value");
-  const bucketAngleValue = document.getElementById("bucket-angle-value");
-
-  // 获取角度值
-  const cabAngle = parseInt(cabRotate.value);
-  const boomAngle = parseInt(boomRotate.value);
-  const armAngle = parseInt(armRotate.value);
-  const bucketAngle = parseInt(bucketRotate.value);
-
-  // 更新角度，考虑关节角度的叠加关系
-  // 驾驶舱角度
-  excavatorParts[0].rotate = cabAngle;
-
-  // 大臂角度 = 驾驶舱角度 + 大臂相对角度
-  const boomRelativeAngle = -30 + boomAngle;
-  excavatorParts[1].rotate = cabAngle + boomRelativeAngle;
-
-  // 小臂角度 = 大臂角度 + 小臂相对角度
-  const armRelativeAngle = -90 + armAngle;
-  excavatorParts[2].rotate = excavatorParts[1].rotate + armRelativeAngle;
-
-  // 铲斗角度 = 小臂角度 + 铲斗相对角度
-  const bucketRelativeAngle = -125 + bucketAngle;
-  excavatorParts[3].rotate = excavatorParts[2].rotate + bucketRelativeAngle;
-
-  // 显示角度值（展示相对角度和绝对角度）
-  cabAngleValue.textContent = `${cabAngle}° (绝对: ${excavatorParts[0].rotate.toFixed(
-    1
-  )}°)`;
-  boomAngleValue.textContent = `${boomAngle}° (绝对: ${excavatorParts[1].rotate.toFixed(
-    1
-  )}°)`;
-  armAngleValue.textContent = `${armAngle}° (绝对: ${excavatorParts[2].rotate.toFixed(
-    1
-  )}°)`;
-  bucketAngleValue.textContent = `${bucketAngle}° (绝对: ${excavatorParts[3].rotate.toFixed(
-    1
-  )}°)`;
-
-  // 重置主体位置的center（保持不变）
-  const bodyCenter = excavatorParts[0].center.slice();
-
-  // 重新计算所有部件的位置
-  updatePartsPositions();
-
-  // 渲染更新后的挖掘机
-  renderExcavator();
-}
-
-// 设置控制事件监听器
 function setupControlEvents() {
-  // 角度控制
-  const cabRotate = document.getElementById("cab-rotate");
-  const boomRotate = document.getElementById("boom-rotate");
-  const armRotate = document.getElementById("arm-rotate");
-  const bucketRotate = document.getElementById("bucket-rotate");
-
-  cabRotate.addEventListener("input", updateExcavatorAngles);
-  boomRotate.addEventListener("input", updateExcavatorAngles);
-  armRotate.addEventListener("input", updateExcavatorAngles);
-  bucketRotate.addEventListener("input", updateExcavatorAngles);
-
-  // 部件显示控制
-  const showBody = document.getElementById("show-body");
-  const showBoom = document.getElementById("show-boom");
-  const showArm = document.getElementById("show-arm");
-  const showBucket = document.getElementById("show-bucket");
-
-  showBody.addEventListener("change", updatePartsVisibility);
-  showBoom.addEventListener("change", updatePartsVisibility);
-  showArm.addEventListener("change", updatePartsVisibility);
-  showBucket.addEventListener("change", updatePartsVisibility);
-
-  // 锚点设置相关
-  const anchorPartSelect = document.getElementById("anchor-part");
-  const updateRotateAnchorBtn = document.getElementById("update-rotate-anchor");
-  const updateNextAnchorBtn = document.getElementById("update-next-anchor");
-
-  // 选择部件时更新锚点设置显示
-  anchorPartSelect.addEventListener("change", updateAnchorInputs);
-
-  // 更新锚点按钮
-  updateRotateAnchorBtn.addEventListener("click", updateRotateAnchor);
-  updateNextAnchorBtn.addEventListener("click", updateNextAnchor);
-
-  // 初始化锚点输入框
-  updateAnchorInputs();
+    document.getElementById("cab-rotate")?.addEventListener("input", updateExcavatorAngles); document.getElementById("boom-rotate")?.addEventListener("input", updateExcavatorAngles); document.getElementById("arm-rotate")?.addEventListener("input", updateExcavatorAngles); document.getElementById("bucket-rotate")?.addEventListener("input", updateExcavatorAngles); document.getElementById("show-body")?.addEventListener("change", updatePartsVisibility); document.getElementById("show-boom")?.addEventListener("change", updatePartsVisibility); document.getElementById("show-arm")?.addEventListener("change", updatePartsVisibility); document.getElementById("show-bucket")?.addEventListener("change", updatePartsVisibility); document.getElementById("anchor-part")?.addEventListener("change", updateAnchorInputs); document.getElementById("update-rotate-anchor")?.addEventListener("click", updateRotateAnchor); document.getElementById("update-next-anchor")?.addEventListener("click", updateNextAnchor); document.getElementById("apply-scale-button")?.addEventListener("click", applyRealDimensionsScale); updateAnchorInputs();
 }
 
-// 更新部件显示状态
+// --- Angle and Position Calculations ---
+function updateExcavatorAngles() {
+    const cabRotate = document.getElementById("cab-rotate"); const boomRotate = document.getElementById("boom-rotate"); const armRotate = document.getElementById("arm-rotate"); const bucketRotate = document.getElementById("bucket-rotate"); const cabAngleValue = document.getElementById("cab-angle-value"); const boomAngleValue = document.getElementById("boom-angle-value"); const armAngleValue = document.getElementById("arm-angle-value"); const bucketAngleValue = document.getElementById("bucket-angle-value"); if (!cabRotate || !boomRotate || !armRotate || !bucketRotate || !cabAngleValue || !boomAngleValue || !armAngleValue || !bucketAngleValue || !excavatorParts || excavatorParts.length < 4) { console.error("Control elements or parts data missing for angle update."); return; } const cabSliderAngle = parseInt(cabRotate.value); const boomSliderValue = parseInt(boomRotate.value); const armSliderValue = parseInt(armRotate.value); const bucketSliderValue = parseInt(bucketRotate.value); const boomRelAngle = -45 + boomSliderValue; const armRelAngle = 30 - armSliderValue; const bucketRelAngle = 50 - bucketSliderValue; const bodyAbsAngle = cabSliderAngle; const boomAbsAngle = bodyAbsAngle + boomRelAngle; const armAbsAngle = boomAbsAngle + armRelAngle; const bucketAbsAngle = armAbsAngle + bucketRelAngle; excavatorParts[0].rotate = bodyAbsAngle; excavatorParts[1].rotate = boomAbsAngle; excavatorParts[2].rotate = armAbsAngle; excavatorParts[3].rotate = bucketAbsAngle; cabAngleValue.textContent = `${bodyAbsAngle}° abs`; boomAngleValue.textContent = `${boomRelAngle.toFixed(0)}° rel / ${boomAbsAngle.toFixed(0)}° abs`; armAngleValue.textContent = `${armRelAngle.toFixed(0)}° rel / ${armAbsAngle.toFixed(0)}° abs`; bucketAngleValue.textContent = `${bucketRelAngle.toFixed(0)}° rel / ${bucketAbsAngle.toFixed(0)}° abs`; updatePartsPositions(); renderExcavator();
+}
+
+function calcNextAnchor(idx) {
+    const currentPart = excavatorParts[idx]; const nextPart = excavatorParts[idx + 1]; if (!currentPart || !nextPart || !currentPart.rotate_anchor_pos || !currentPart.rotate_anchor || !currentPart.next_anchor || !currentPart.size) { return; } const currentRotateRad = currentPart.rotate * Math.PI / 180; const vectorX = (currentPart.next_anchor[0] - currentPart.rotate_anchor[0]) * currentPart.size[0]; const vectorY = (currentPart.rotate_anchor[1] - currentPart.next_anchor[1]) * currentPart.size[1]; const rotatedVectorX = vectorX * Math.cos(currentRotateRad) - vectorY * Math.sin(currentRotateRad); const rotatedVectorY = vectorX * Math.sin(currentRotateRad) + vectorY * Math.cos(currentRotateRad); nextPart.rotate_anchor_pos = [rotatedVectorX + currentPart.rotate_anchor_pos[0], rotatedVectorY + currentPart.rotate_anchor_pos[1]];
+}
+
+function updatePartsPositions() {
+    if (!excavatorParts || excavatorParts.length === 0) return; for (let i = 0; i < excavatorParts.length - 1; i++) { calcNextAnchor(i); } updatePartMeasurements();
+}
+
+function calcBucketHeadPos() {
+    const bucketPart = excavatorParts.find(p => p.part === 'bucket'); if (!bucketPart || !bucketPart.rotate_anchor_pos || !bucketPart.rotate_anchor || !bucketPart.next_anchor || !bucketPart.size) { return null; } const bucketRotateRad = bucketPart.rotate * Math.PI / 180; const vectorX = (bucketPart.next_anchor[0] - bucketPart.rotate_anchor[0]) * bucketPart.size[0]; const vectorY = (bucketPart.rotate_anchor[1] - bucketPart.next_anchor[1]) * bucketPart.size[1]; const rotatedVectorX = vectorX * Math.cos(bucketRotateRad) - vectorY * Math.sin(bucketRotateRad); const rotatedVectorY = vectorX * Math.sin(bucketRotateRad) + vectorY * Math.cos(bucketRotateRad); return { x: rotatedVectorX + bucketPart.rotate_anchor_pos[0], y: rotatedVectorY + bucketPart.rotate_anchor_pos[1] };
+}
+
+// --- Rendering Functions ---
+function renderExcavator() {
+    const canvas = document.getElementById("excavator-canvas"); if (!canvas) return; const ctx = canvas.getContext("2d"); ctx.clearRect(0, 0, canvas.width, canvas.height); if (!excavatorParts || excavatorParts.length === 0 || !Object.keys(excavatorImages).length) { ctx.fillStyle = 'red'; ctx.font = '16px Arial'; ctx.fillText('错误: 挖掘机数据或图像未加载.', 20, 40); return; } let bucketTipHeightAboveGround = null; const bodyPart = excavatorParts[0]; let groundLineAngle = 0; if (!bodyPart || !bodyPart.rotate_anchor_pos || !bodyPart.size) { groundLine.start = { x: 0, y: canvas.height * 0.8 }; groundLine.end = { x: canvas.width, y: canvas.height * 0.8 }; } else { groundLineAngle = bodyPart.rotate * Math.PI / 180; const h = bodyPart.size[1] / 2; const rotationCenterX = bodyPart.rotate_anchor_pos[0] + globalOffset.x; const rotationCenterY = bodyPart.rotate_anchor_pos[1] + globalOffset.y; const vecX = 0, vecY = h; const rotatedVecX = vecX * Math.cos(groundLineAngle) - vecY * Math.sin(groundLineAngle); const rotatedVecY = vecX * Math.sin(groundLineAngle) + vecY * Math.cos(groundLineAngle); const groundPointX = rotationCenterX + rotatedVecX; const groundPointY = rotationCenterY + rotatedVecY; const lineLength = canvas.width * 1.5; groundLine.start = { x: groundPointX - Math.cos(groundLineAngle) * lineLength / 2, y: groundPointY - Math.sin(groundLineAngle) * lineLength / 2 }; groundLine.end = { x: groundPointX + Math.cos(groundLineAngle) * lineLength / 2, y: groundPointY + Math.sin(groundLineAngle) * lineLength / 2 }; } ctx.save(); ctx.beginPath(); ctx.moveTo(groundLine.start.x, groundLine.start.y); ctx.lineTo(groundLine.end.x, groundLine.end.y); ctx.strokeStyle = "#8B4513"; ctx.lineWidth = 3; ctx.stroke(); const textureSpacing = 25; const textureLength = 12; const textureAngle = groundLineAngle + Math.PI / 2; const textureVectorX = Math.cos(textureAngle); const textureVectorY = Math.sin(textureAngle); const numTextures = Math.floor(canvas.width / textureSpacing); ctx.strokeStyle = "#A0522D"; ctx.lineWidth = 1; const groundMidX = (groundLine.start.x + groundLine.end.x) / 2; const groundMidY = (groundLine.start.y + groundLine.end.y) / 2; for (let i = -numTextures / 2; i < numTextures / 2; i++) { const t = i * textureSpacing; const posX = groundMidX + Math.cos(groundLineAngle) * t; const posY = groundMidY + Math.sin(groundLineAngle) * t; ctx.beginPath(); ctx.moveTo(posX, posY); ctx.lineTo(posX + textureLength * textureVectorX, posY + textureLength * textureVectorY); ctx.stroke(); } ctx.restore(); const renderOrder = ["body", "boom", "arm", "bucket"]; renderOrder.forEach(partName => { const part = excavatorParts.find(p => p.part === partName); if (part && excavatorImages[partName] && partsVisibility[partName] && part.rotate_anchor_pos) { drawPart(ctx, part, excavatorImages[partName]); } }); const bucketPart = excavatorParts.find(p => p.part === 'bucket'); if (partsVisibility.bucket && bucketPart && bucketPart.rotate_anchor_pos) { const headPos = calcBucketHeadPos(); if (headPos) { const tipGlobalX = headPos.x + globalOffset.x; const tipGlobalY = headPos.y + globalOffset.y; ctx.save(); ctx.fillStyle = "#FF6600"; ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(tipGlobalX, tipGlobalY, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); bucketTipHeightAboveGround = calculatePerpendicularDistanceToLine( tipGlobalX, tipGlobalY, groundLine.start.x, groundLine.start.y, groundLine.end.x, groundLine.end.y ); const glStartX = groundLine.start.x; const glStartY = groundLine.start.y; const glEndX = groundLine.end.x; const glEndY = groundLine.end.y; const glDx = glEndX - glStartX; const glDy = glEndY - glStartY; const lineLengthSq = glDx * glDx + glDy * glDy; let groundPointX_Closest, groundPointY_Closest; if (lineLengthSq < 1e-9) { groundPointX_Closest = glStartX; groundPointY_Closest = glStartY; } else { const t = ((tipGlobalX - glStartX) * glDx + (tipGlobalY - glStartY) * glDy) / lineLengthSq; groundPointX_Closest = glStartX + t * glDx; groundPointY_Closest = glStartY + t * glDy; } ctx.save(); ctx.beginPath(); ctx.moveTo(tipGlobalX, tipGlobalY); ctx.lineTo(groundPointX_Closest, groundPointY_Closest); ctx.strokeStyle = "#007bff"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]); const midX = (tipGlobalX + groundPointX_Closest) / 2; const midY = (tipGlobalY + groundPointY_Closest) / 2; const textOffsetX = 15 * Math.cos(groundLineAngle); const textOffsetY = 15 * Math.sin(groundLineAngle); ctx.fillStyle = "#007bff"; ctx.font = "bold 12px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(`${bucketTipHeightAboveGround.toFixed(1)}px`, midX + textOffsetX, midY + textOffsetY); ctx.restore(); } } if (debugMode) { if (excavatorParts && excavatorParts.length > 1 && excavatorParts[1].rotate_anchor_pos) { drawConnectionPoints(ctx); } }
+}
+
+function drawPart(ctx, part, image) {
+    ctx.save(); ctx.translate(part.rotate_anchor_pos[0] + globalOffset.x, part.rotate_anchor_pos[1] + globalOffset.y); ctx.rotate(part.rotate * Math.PI / 180); const width = part.size[0]; const height = part.size[1]; const offsetX = (-part.rotate_anchor[0] - 0.5) * width; const offsetY = (part.rotate_anchor[1] - 0.5) * height; try { ctx.drawImage(image, offsetX, offsetY, width, height); } catch (e) { console.error(`Error drawing image for ${part.part}:`, e); } ctx.restore();
+}
+
+// --- Debugging Visualization Function ---
+function drawConnectionPoints(ctx) {
+    for (let i = 0; i < excavatorParts.length - 1; i++) { const currentPart = excavatorParts[i]; const nextPart = excavatorParts[i + 1]; if (!currentPart || !nextPart || !currentPart.rotate_anchor_pos || !nextPart.rotate_anchor_pos || !partsVisibility[currentPart.part] || !partsVisibility[nextPart.part]) { continue; } const currentRotateRad = currentPart.rotate * Math.PI / 180; const vectorX = (currentPart.next_anchor[0] - currentPart.rotate_anchor[0]) * currentPart.size[0]; const vectorY = (currentPart.rotate_anchor[1] - currentPart.next_anchor[1]) * currentPart.size[1]; const rotatedVectorX = vectorX * Math.cos(currentRotateRad) - vectorY * Math.sin(currentRotateRad); const rotatedVectorY = vectorX * Math.sin(currentRotateRad) + vectorY * Math.cos(currentRotateRad); const globalNextAnchor = { x: rotatedVectorX + currentPart.rotate_anchor_pos[0] + globalOffset.x, y: rotatedVectorY + currentPart.rotate_anchor_pos[1] + globalOffset.y }; const nextGlobalAnchor = { x: nextPart.rotate_anchor_pos[0] + globalOffset.x, y: nextPart.rotate_anchor_pos[1] + globalOffset.y }; ctx.save(); ctx.fillStyle = "blue"; ctx.strokeStyle = "white"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(globalNextAnchor.x, globalNextAnchor.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "purple"; ctx.strokeStyle = "white"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(nextGlobalAnchor.x, nextGlobalAnchor.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); const dx = nextGlobalAnchor.x - globalNextAnchor.x; const dy = nextGlobalAnchor.y - globalNextAnchor.y; const distance = Math.sqrt(dx * dx + dy * dy); ctx.save(); if (distance > 1.5) { ctx.strokeStyle = "red"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); } else { ctx.strokeStyle = "lime"; ctx.lineWidth = 1.5; } ctx.beginPath(); ctx.moveTo(globalNextAnchor.x, globalNextAnchor.y); ctx.lineTo(nextGlobalAnchor.x, nextGlobalAnchor.y); ctx.stroke(); if (distance > 1.5) ctx.setLineDash([]); ctx.restore(); }
+}
+
+// --- Utility Functions ---
+function calculatePerpendicularDistanceToLine(x, y, startX, startY, endX, endY) {
+    const dx = endX - startX; const dy = endY - startY; const lineLengthSq = dx * dx + dy * dy; if (lineLengthSq < 1e-9) return 0; const numerator = dy * x - dx * y + endX * startY - startX * endY; const denominator = Math.sqrt(lineLengthSq); return numerator / denominator;
+}
+
+function calculatePartDistanceUsingSize(rotateAnchor, nextAnchor, size) {
+    if (!rotateAnchor || !nextAnchor || !size) return 0; const dx_local = nextAnchor[0] - rotateAnchor[0]; const dy_local = nextAnchor[1] - rotateAnchor[1]; const dx_scaled = dx_local * size[0]; const dy_scaled = dy_local * size[1]; return Math.sqrt(dx_scaled * dx_scaled + dy_scaled * dy_scaled);
+}
+
 function updatePartsVisibility() {
-  partsVisibility.body = document.getElementById("show-body").checked;
-  partsVisibility.boom = document.getElementById("show-boom").checked;
-  partsVisibility.arm = document.getElementById("show-arm").checked;
-  partsVisibility.bucket = document.getElementById("show-bucket").checked;
-
-  renderExcavator();
+    partsVisibility.body = document.getElementById("show-body")?.checked ?? true; partsVisibility.boom = document.getElementById("show-boom")?.checked ?? true; partsVisibility.arm = document.getElementById("show-arm")?.checked ?? true; partsVisibility.bucket = document.getElementById("show-bucket")?.checked ?? true; renderExcavator();
 }
 
-// 更新锚点输入框显示
 function updateAnchorInputs() {
-  const selectedPart = document.getElementById("anchor-part").value;
-  const part = excavatorParts.find((p) => p.part === selectedPart);
-
-  if (part) {
-    // 设置旋转锚点输入框
-    document.getElementById("rotate-anchor-x").value = part.rotate_anchor[0];
-    document.getElementById("rotate-anchor-y").value = part.rotate_anchor[1];
-
-    // 设置连接点输入框
-    document.getElementById("next-anchor-x").value = part.next_anchor[0];
-    document.getElementById("next-anchor-y").value = part.next_anchor[1];
-  }
+    const selectedPartName = document.getElementById("anchor-part")?.value; const rotateXInput = document.getElementById("rotate-anchor-x"); const rotateYInput = document.getElementById("rotate-anchor-y"); const nextXInput = document.getElementById("next-anchor-x"); const nextYInput = document.getElementById("next-anchor-y"); if (!selectedPartName || !rotateXInput || !rotateYInput || !nextXInput || !nextYInput || !excavatorParts) return; const part = excavatorParts.find(p => p.part === selectedPartName); if (part) { rotateXInput.value = part.rotate_anchor[0]?.toFixed(3) ?? 0; rotateYInput.value = part.rotate_anchor[1]?.toFixed(3) ?? 0; nextXInput.value = part.next_anchor[0]?.toFixed(3) ?? 0; nextYInput.value = part.next_anchor[1]?.toFixed(3) ?? 0; } else { rotateXInput.value = ''; rotateYInput.value = ''; nextXInput.value = ''; nextYInput.value = ''; }
 }
 
-// 更新旋转锚点
 function updateRotateAnchor() {
-  const selectedPart = document.getElementById("anchor-part").value;
-  const part = excavatorParts.find((p) => p.part === selectedPart);
-
-  if (part) {
-    const x = parseFloat(document.getElementById("rotate-anchor-x").value);
-    const y = parseFloat(document.getElementById("rotate-anchor-y").value);
-
-    if (!isNaN(x) && !isNaN(y)) {
-      part.rotate_anchor = [x, y];
-      updatePartsPositions();
-      renderExcavator();
-    }
-  }
+    const selectedPartName = document.getElementById("anchor-part")?.value; if (!selectedPartName || !excavatorParts) return; const part = excavatorParts.find(p => p.part === selectedPartName); if (part) { const x = parseFloat(document.getElementById("rotate-anchor-x")?.value); const y = parseFloat(document.getElementById("rotate-anchor-y")?.value); if (!isNaN(x) && !isNaN(y)) { part.rotate_anchor = [x, y]; updatePartsPositions(); renderExcavator(); } else { alert('请输入有效的旋转锚点 X 和 Y 值。'); } }
 }
 
-// 更新连接点
 function updateNextAnchor() {
-  const selectedPart = document.getElementById("anchor-part").value;
-  const part = excavatorParts.find((p) => p.part === selectedPart);
-
-  if (part) {
-    const x = parseFloat(document.getElementById("next-anchor-x").value);
-    const y = parseFloat(document.getElementById("next-anchor-y").value);
-
-    if (!isNaN(x) && !isNaN(y)) {
-      part.next_anchor = [x, y];
-      updatePartsPositions();
-      renderExcavator();
-    }
-  }
+    const selectedPartName = document.getElementById("anchor-part")?.value; if (!selectedPartName || !excavatorParts) return; const part = excavatorParts.find(p => p.part === selectedPartName); if (part) { const x = parseFloat(document.getElementById("next-anchor-x")?.value); const y = parseFloat(document.getElementById("next-anchor-y")?.value); if (!isNaN(x) && !isNaN(y)) { part.next_anchor = [x, y]; updatePartsPositions(); renderExcavator(); } else { alert('请输入有效的连接点 X 和 Y 值。'); } }
 }
 
-// 重置到原始锚点设置
 function resetToOriginalAnchors() {
-  originalAnchors.forEach((originalPart) => {
-    const part = excavatorParts.find((p) => p.part === originalPart.part);
-    if (part) {
-      part.rotate_anchor = [...originalPart.rotate_anchor];
-      part.next_anchor = [...originalPart.next_anchor];
-    }
-  });
-
-  updateAnchorInputs();
-  updatePartsPositions();
-  renderExcavator();
+    // Only resets anchors
+    if (!originalAnchors || !excavatorParts) return; originalAnchors.forEach(originalPartData => { const part = excavatorParts.find(p => p.part === originalPartData.part); if (part) { part.rotate_anchor = [...originalPartData.rotate_anchor]; part.next_anchor = [...originalPartData.next_anchor]; } }); updateAnchorInputs(); updatePartsPositions();
 }
 
-// 应用当前锚点设置
 function applyCurrentAnchors() {
-  const anchorsJSON = JSON.stringify(
-    excavatorParts.map((part) => ({
-      part: part.part,
-      rotate_anchor: part.rotate_anchor,
-      next_anchor: part.next_anchor,
-    })),
-    null,
-    2
-  );
-
-  console.log("\u5f53\u524d\u951a\u70b9\u8bbe\u7f6e:\n", anchorsJSON);
-  alert(
-    "\u5f53\u524d\u951a\u70b9\u8bbe\u7f6e\u5df2\u8f93\u51fa\u5230\u63a7\u5236\u53f0"
-  );
+    if (!excavatorParts) return; const currentAnchors = excavatorParts.map(part => ({ part: part.part, rotate_anchor: part.rotate_anchor.map(v => parseFloat(v.toFixed(3))), next_anchor: part.next_anchor.map(v => parseFloat(v.toFixed(3))), })); const anchorsJSON = JSON.stringify(currentAnchors, null, 2); console.log("当前锚点配置 (JSON):\n", anchorsJSON); alert("当前锚点配置已输出到浏览器控制台。");
 }
 
-// 重置挖掘机到默认位置
+function toggleDebugMode() {
+    debugMode = !debugMode; console.log(`显示连接点: ${debugMode ? '开启' : '关闭'}`); renderExcavator();
+}
+
 function resetExcavator() {
-  // 重置角度
-  document.getElementById("cab-rotate").value = "0";
-  document.getElementById("boom-rotate").value = "30";
-  document.getElementById("arm-rotate").value = "45";
-  document.getElementById("bucket-rotate").value = "35";
-
-  // 重置部件显示状态
-  document.getElementById("show-body").checked = true;
-  document.getElementById("show-boom").checked = true;
-  document.getElementById("show-arm").checked = true;
-  document.getElementById("show-bucket").checked = true;
-
-  partsVisibility = {
-    body: true,
-    boom: true,
-    arm: true,
-    bucket: true,
-  };
-
-  // 重置锚点设置
-  resetToOriginalAnchors();
-
-  // 更新角度和渲染
-  updateExcavatorAngles();
+    console.log("重置挖掘机视图..."); document.getElementById("cab-rotate").value = 0; document.getElementById("boom-rotate").value = 55; document.getElementById("arm-rotate").value = 90; document.getElementById("bucket-rotate").value = 90; document.getElementById("show-body").checked = true; document.getElementById("show-boom").checked = true; document.getElementById("show-arm").checked = true; document.getElementById("show-bucket").checked = true; updatePartsVisibility(); resetToOriginalAnchors(); resetSizesToOriginal(); updateExcavatorAngles();
 }
 
-function calculateVerticalDistanceToLine(x, y, startX, startY, endX, endY) {
-  // 计算直线方程 Ax + By + C = 0
-  const A = endY - startY;
-  const B = startX - endX;
-  const C = endX * startY - startX * endY;
+/**
+ * Resets part sizes to their initial values (original size * original scale from config).
+ */
+function resetSizesToOriginal() {
+    if (Object.keys(originalSizes).length === 0 || Object.keys(originalScales).length === 0) {
+        console.warn("原始尺寸或比例未存储，无法重置。"); return;
+    }
+    let changed = false;
+    excavatorParts.forEach(part => {
+        const partName = part.part;
+        if (originalSizes[partName] && originalScales[partName] !== undefined) {
+            const initialScaledWidth = originalSizes[partName][0] * originalScales[partName];
+            const initialScaledHeight = originalSizes[partName][1] * originalScales[partName];
+            if (Math.abs(part.size[0] - initialScaledWidth) > 1e-3 || Math.abs(part.size[1] - initialScaledHeight) > 1e-3) {
+                part.size = [initialScaledWidth, initialScaledHeight];
+                changed = true;
+            }
+        }
+    });
+    if(changed){
+        console.log("部件尺寸已重置为config.json定义的初始值。");
+        const displayDiv = document.getElementById('scale-ratios-display');
+        if (displayDiv) { displayDiv.innerHTML = '部件尺寸已重置。应用比例后将在此显示各部件缩放比。'; }
+        updatePartsPositions();
+        renderExcavator();
+    }
+}
 
-  // 计算分子绝对值
-  const numerator = A * x + B * y + C;
-  // 计算分母（直线长度）
-  const denominator = Math.sqrt(A * A + B * B);
+/**
+ * Applies scaling based on real dimensions, keeping Body scale = 1 (relative to original unscaled size)
+ * and adjusting other parts proportionally based on real dimension ratios.
+ * This OVERRIDES any scale factors defined in config.json for Boom, Arm, Bucket.
+ */
+function applyRealDimensionsScale() {
+    // 1. Read inputs
+    // const realBodyHeightRef = parseFloat(document.getElementById('real-body-height')?.value); // Not used directly
+    const realBodyToBoomDist = parseFloat(document.getElementById('real-body-boom')?.value);
+    const realBoomToArmDist = parseFloat(document.getElementById('real-boom-arm')?.value);
+    const realArmToBucketDist = parseFloat(document.getElementById('real-arm-bucket')?.value);
+    const realBucketToTipDist = parseFloat(document.getElementById('real-bucket-tip')?.value);
 
-  // 返回带符号的距离（线上为正，线下为负）
-  return numerator / denominator;
+    // 2. Validate inputs (Body->Boom must be > 0)
+    if (isNaN(realBodyToBoomDist) || realBodyToBoomDist <= 0 ||
+        isNaN(realBoomToArmDist) || realBoomToArmDist < 0 ||
+        isNaN(realArmToBucketDist) || realArmToBucketDist < 0 ||
+        isNaN(realBucketToTipDist) || realBucketToTipDist < 0) {
+        alert("请输入所有有效的真实尺寸（车身-大臂距离需>0，其他距离需>=0，单位mm）。"); return;
+    }
+    if (Object.keys(originalSizes).length === 0 || !originalConfigData || originalConfigData.length === 0) {
+        alert("原始尺寸或配置数据未加载，无法缩放。"); return;
+    }
+
+    try {
+        // 3. Calculate Real Ratios relative to Body->Boom distance
+        const realRatio_BoomArm_To_BodyBoom = realBoomToArmDist / realBodyToBoomDist;
+        const realRatio_ArmBucket_To_BodyBoom = realArmToBucketDist / realBodyToBoomDist;
+        const realRatio_BucketTip_To_BodyBoom = realBucketToTipDist / realBodyToBoomDist;
+
+        // 4. Get Original Config Part data and Calculate Original Pixel Distances
+        //    using ORIGINAL UNscaled sizes and ORIGINAL anchors
+        const findOrigConf = (partName) => originalConfigData.find(p => p.part === partName);
+        const origBodyConf = findOrigConf('body');
+        const origBoomConf = findOrigConf('boom');
+        const origArmConf = findOrigConf('arm');
+        const origBucketConf = findOrigConf('bucket');
+        if (!origBodyConf || !origBoomConf || !origArmConf || !origBucketConf){ alert("无法找到所有部件的原始配置信息。"); return; }
+
+        // Calculate distances based on ORIGINAL UNscaled sizes
+        const originalPxBodyBoom = calculatePartDistanceUsingSize(origBodyConf.rotate_anchor, origBodyConf.next_anchor, originalSizes['body']);
+        const originalPxBoomArm = calculatePartDistanceUsingSize(origBoomConf.rotate_anchor, origBoomConf.next_anchor, originalSizes['boom']);
+        const originalPxArmBucket = calculatePartDistanceUsingSize(origArmConf.rotate_anchor, origArmConf.next_anchor, originalSizes['arm']);
+        const originalPxBucketTip = calculatePartDistanceUsingSize(origBucketConf.rotate_anchor, origBucketConf.next_anchor, originalSizes['bucket']);
+
+        if (originalPxBodyBoom <= 1e-6) { alert("原始配置中车身->大臂像素距离过小或为零，无法计算比例。"); return; }
+
+        // 5. Determine Target Rendered Distances based on Body original size (scale=1)
+        const targetPxBodyBoom = originalPxBodyBoom; // Rendered Body->Boom distance remains unchanged
+        const targetPxBoomArm = targetPxBodyBoom * realRatio_BoomArm_To_BodyBoom;
+        const targetPxArmBucket = targetPxBodyBoom * realRatio_ArmBucket_To_BodyBoom;
+        const targetPxBucketTip = targetPxBodyBoom * realRatio_BucketTip_To_BodyBoom;
+
+        // 6. Calculate Required FINAL Scale Factors (relative to ORIGINAL UNscaled sizes)
+        const bodyFinalScale = 1.0; // Body scale is fixed at 1 (relative to its original size)
+        const boomFinalScale = (originalPxBoomArm > 1e-6) ? targetPxBoomArm / originalPxBoomArm : 1;
+        const armFinalScale = (originalPxArmBucket > 1e-6) ? targetPxArmBucket / originalPxArmBucket : 1;
+        const bucketFinalScale = (originalPxBucketTip > 1e-6) ? targetPxBucketTip / originalPxBucketTip : 1;
+
+        // 7. Apply Scaling (relative to originalSizes)
+        let scalingApplied = false;
+        excavatorParts.forEach(part => {
+            const partName = part.part;
+            const origSize = originalSizes[partName];
+            if (!origSize) return;
+
+            let finalScale = 1.0;
+            if (partName === 'body') finalScale = bodyFinalScale; // Should be 1
+            else if (partName === 'boom') finalScale = boomFinalScale;
+            else if (partName === 'arm') finalScale = armFinalScale;
+            else if (partName === 'bucket') finalScale = bucketFinalScale;
+
+            const newWidth = origSize[0] * finalScale;
+            const newHeight = origSize[1] * finalScale;
+
+            // Check if size actually needs updating
+            if (Math.abs(part.size[0] - newWidth) > 1e-3 || Math.abs(part.size[1] - newHeight) > 1e-3) {
+                 part.size = [newWidth, newHeight]; // Update current size
+                 scalingApplied = true;
+            }
+        });
+
+        // 8. Update Display / Log / Render
+         if(scalingApplied){
+            console.log("应用真实尺寸比例 (车身=1x), 计算出的最终缩放因子:", {bodyFinalScale, boomFinalScale, armFinalScale, bucketFinalScale});
+
+            // Update the display area with calculated final scale factors
+            const displayDiv = document.getElementById('scale-ratios-display');
+            if (displayDiv) {
+                // Display factors relative to original unscaled size
+                displayDiv.innerHTML = `
+                    <strong>计算出的最终缩放因子 (相对原始尺寸):</strong><br>
+                    车身 (Body): ${bodyFinalScale.toFixed(3)}<br>
+                    大臂 (Boom): ${boomFinalScale.toFixed(3)}<br>
+                    小臂 (Arm): ${armFinalScale.toFixed(3)}<br>
+                    铲斗 (Bucket): ${bucketFinalScale.toFixed(3)}
+                `;
+            }
+            updatePartsPositions();
+            renderExcavator();
+        } else {
+             console.log("计算出的尺寸与当前尺寸无明显变化，未应用缩放。");
+             const displayDiv = document.getElementById('scale-ratios-display');
+             if (displayDiv) { displayDiv.innerHTML = '计算出的缩放比无需应用 (比例已匹配或输入错误)。'; }
+        }
+
+    } catch(e) {
+        alert("应用缩放时出错: " + e.message); console.error("Error applying scale:", e);
+    }
+}
+
+
+// --- Measurement Display Logic ---
+/**
+ * Updates the measurement display table. Includes real-world ratios relative to Body->Boom distance.
+ */
+function updatePartMeasurements() {
+    const measurementsDiv = document.getElementById("part-measurements");
+    if (!measurementsDiv) return;
+    if (!excavatorParts || excavatorParts.length === 0 || !originalSizes || !originalSizes['body'] || !originalConfigData || originalConfigData.length === 0) {
+         measurementsDiv.innerHTML = '<p>部件数据未加载或原始数据丢失。</p>'; return;
+    }
+
+    // Read Real Dimensions
+    const realBodyHeightRef = parseFloat(document.getElementById('real-body-height')?.value); // Still read for context
+    const realBodyToBoomDist = parseFloat(document.getElementById('real-body-boom')?.value);
+    const realBoomToArmDist = parseFloat(document.getElementById('real-boom-arm')?.value);
+    const realArmToBucketDist = parseFloat(document.getElementById('real-arm-bucket')?.value);
+    const realBucketToTipDist = parseFloat(document.getElementById('real-bucket-tip')?.value);
+    const hasRealBodyBoomRef = !isNaN(realBodyToBoomDist) && realBodyToBoomDist > 0;
+
+    // Calculate Real Ratios relative to Body->Boom distance
+    let realRatioBodyBoom = '1.00'; // Base reference if valid
+    let realRatioBoomArm = 'N/A';
+    let realRatioArmBucket = 'N/A';
+    let realRatioBucketTip = 'N/A';
+    if (hasRealBodyBoomRef) {
+        if (!isNaN(realBoomToArmDist) && realBoomToArmDist >= 0) { realRatioBoomArm = (realBoomToArmDist / realBodyToBoomDist).toFixed(2); }
+        if (!isNaN(realArmToBucketDist) && realArmToBucketDist >= 0) { realRatioArmBucket = (realArmToBucketDist / realBodyToBoomDist).toFixed(2); }
+        if (!isNaN(realBucketToTipDist) && realBucketToTipDist >= 0) { realRatioBucketTip = (realBucketToTipDist / realBodyToBoomDist).toFixed(2); }
+    } else {
+        realRatioBodyBoom = 'N/A'; // Cannot calculate ratios without reference
+    }
+
+    // Generate HTML
+    // Use ORIGINAL Body->Boom pixel distance as the consistent RENDER reference unit
+    const findOrigConf = (partName) => originalConfigData.find(p => p.part === partName);
+    const origBodyConf = findOrigConf('body');
+    const renderRefPx = (origBodyConf && originalSizes['body']) ? calculatePartDistanceUsingSize(origBodyConf.rotate_anchor, origBodyConf.next_anchor, originalSizes['body']) : 0;
+
+    // Header Info
+    let html = `<div style="font-weight: bold; margin-bottom: 5px;">渲染参考: 原始 车身->大臂 距离 = ${renderRefPx > 0 ? renderRefPx.toFixed(1) + 'px' : 'N/A'}</div>`;
+    if (hasRealBodyBoomRef) { html += `<div style="font-weight: bold; margin-bottom: 5px;">真实参考: 车身->大臂 距离 = ${realBodyToBoomDist.toFixed(0)} mm</div>`; }
+    else { html += `<div style="font-weight: bold; margin-bottom: 5px; color: #777;">(请输入真实 车身-大臂 距离以计算真实比例)</div>`; }
+    if (!isNaN(realBodyHeightRef) && realBodyHeightRef > 0) { // Still show body height if entered
+         html += `<div style="font-weight: bold; margin-bottom: 5px; font-size: 0.9em; color: #555;">(真实车身参考高: ${realBodyHeightRef.toFixed(0)} mm)</div>`;
+    }
+
+    // Table Header: Segment Name, Current Render Length(px), Current Render Ratio (rel to renderRefPx), Real Ratio (rel to realBodyToBoomDist)
+    html += `<table><thead><tr><th>部件(定义段)</th><th>渲染长度(px)</th><th>渲染比例</th><th>真实比例</th></tr></thead><tbody>`;
+
+    const renderOrder = ["body", "boom", "arm", "bucket"];
+    renderOrder.forEach((partName) => {
+        const part = excavatorParts.find((p) => p.part === partName);
+        if (!part) { html += `<tr><td>${partName}</td><td colspan="3">部件丢失</td></tr>`; return; }
+
+        // Calculate CURRENT rendered distance using CURRENT size and ORIGINAL anchors
+        const origPartConf = findOrigConf(partName);
+        if (!origPartConf) { html += `<tr><td>${partName}</td><td colspan="3">原始配置丢失</td></tr>`; return; }
+        const currentPixelDistance = calculatePartDistanceUsingSize(origPartConf.rotate_anchor, origPartConf.next_anchor, part.size); // Use current size
+
+        let rowClass = !partsVisibility[partName] ? "class='inactive-part'" : "";
+        const segmentNameMap = { body: "车身->大臂", boom: "大臂->小臂", arm: "小臂->铲斗", bucket: "铲斗轴->尖" };
+        const segmentName = segmentNameMap[partName] || partName;
+
+        // Calculate CURRENT rendered ratio relative to the CONSISTENT render reference (originalPxBodyBoom)
+        const ratioToReferenceUnit = renderRefPx > 0 ? (currentPixelDistance / renderRefPx).toFixed(2) : 'N/A';
+
+        // Determine which real ratio to show for this segment
+        let realRatioToShow = '---';
+        if (partName === 'body') realRatioToShow = realRatioBodyBoom;
+        else if (partName === 'boom') realRatioToShow = realRatioBoomArm;
+        else if (partName === 'arm') realRatioToShow = realRatioArmBucket;
+        else if (partName === 'bucket') realRatioToShow = realRatioBucketTip;
+
+        html += `<tr ${rowClass}><td>${segmentName}</td><td>${currentPixelDistance ? currentPixelDistance.toFixed(1) : 'N/A'}</td><td>${ratioToReferenceUnit}</td><td>${realRatioToShow}</td></tr>`;
+    });
+    html += "</tbody></table>";
+    measurementsDiv.innerHTML = html;
+}
+
+function calculatePartsRatio() {
+    const bodyPart = excavatorParts.find(p => p.part === 'body'); if (!bodyPart || !bodyPart.size) return { bodyHeight: 0, ratios: {} }; const referenceHeight = bodyPart.size[1]; const ratios = {}; if (!excavatorParts) return { bodyHeight: referenceHeight, ratios: {} }; excavatorParts.forEach((part) => { const distance = calculatePartDistanceUsingSize(part.rotate_anchor, part.next_anchor, part.size); ratios[part.part] = { pixelDistance: distance, ratio: referenceHeight > 0 ? distance / referenceHeight : 0, }; }); return { bodyHeight: referenceHeight, ratios };
 }

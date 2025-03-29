@@ -1,91 +1,103 @@
 <!DOCTYPE html>
-<html lang="en">
-
-<head>
+<html lang="zh-CN"> <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quick Tools</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      display: flex;
-      height: 100vh;
-    }
-
-    .sidebar {
-      background-color: #f1f1f1;
-      padding: 16px;
-      width: 200px;
-    }
-
-    .sidebar a {
-      display: block;
-      padding: 8px 16px;
-      text-decoration: none;
-      color: #333;
-    }
-
-    .sidebar a:hover {
-      background-color: #ddd;
-    }
-
-    .content {
-      flex: 1;
-      padding: 16px;
-    }
-
-    .card {
-      background-color: white;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      padding: 16px;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <div class="sidebar">
-    <a href="#" onclick="showPage('cosine-theorem')">Cosine Theorem Calculator</a>
-    <a href="#" onclick="showPage('angle-converter')">Angle Converter</a>
-    <a href="#" onclick="showPage('excavator-renderer')">Excavator Renderer</a>
-    <!-- Add more sidebar links here -->
-  </div>
+    <a href="#" id="link-cosine-theorem" onclick="showPage('cosine-theorem', this)">余弦定理计算器</a>
+    <a href="#" id="link-angle-converter" onclick="showPage('angle-converter', this)">角度转换器</a>
+    <a href="#" id="link-excavator-renderer" onclick="showPage('excavator-renderer', this)">挖掘机渲染器</a>
+    </div>
 
   <div class="content">
     <div id="page-content">
-      <!-- Page content will be dynamically loaded here -->
+      <div class="card">
+        <h2>欢迎使用 Quick Tools</h2>
+        <p>请从左侧菜单选择一个工具。</p>
+      </div>
     </div>
   </div>
 
-  <!-- Include the JavaScript files for each page -->
   <script src="./cosine-theorem.js"></script>
   <script src="./angle-converter.js"></script>
   <script src="./excavator-renderer.js"></script>
-
-  <!-- Add more page JavaScript files here -->
-
   <script>
-    function showPage(pageName) {
+    function showPage(pageName, clickedLink) {
       const pageContent = document.getElementById('page-content');
+      const sidebarLinks = document.querySelectorAll('.sidebar a');
 
-      switch (pageName) {
-        case 'cosine-theorem':
-          pageContent.innerHTML = getCosineTheoremCalcHTML();
-          calculateCosineTheorem();
-          break;
-        case 'angle-converter':
-          pageContent.innerHTML = getAngleConverterHTML();
-          break;
-        case 'excavator-renderer':
-          pageContent.innerHTML = getExcavatorRendererHTML();
-          initExcavatorRenderer();
-          break;
-        // Add more cases for other pages
-        default:
-          pageContent.innerHTML = '';
+      // Remove 'active' class from all links
+      sidebarLinks.forEach(link => link.classList.remove('active'));
+
+      // Add 'active' class to the clicked link
+      if (clickedLink) {
+        clickedLink.classList.add('active');
       }
+
+      // Clear previous content immediately for better feedback
+      pageContent.innerHTML = '<div class="card"><p>加载中...</p></div>';
+
+      // Use a small timeout to allow the "Loading..." message to render
+      setTimeout(() => {
+          try {
+              switch (pageName) {
+                  case 'cosine-theorem':
+                      pageContent.innerHTML = getCosineTheoremCalcHTML();
+                      // Attach event listener after HTML is in DOM
+                      const calcButtonCosine = document.getElementById('calculate-cosine');
+                      if(calcButtonCosine) {
+                          calcButtonCosine.addEventListener('click', calculateCosineTheorem);
+                      }
+                      // Trigger initial calculation if needed, or clear results
+                       document.getElementById("result-cosine").innerHTML = '请输入边长并点击计算。';
+                      break;
+                  case 'angle-converter':
+                      pageContent.innerHTML = getAngleConverterHTML();
+                       // Attach event listeners after HTML is in DOM
+                       const btnDegToRad = document.getElementById('btn-degreesToRadians');
+                       const btnRadToDeg = document.getElementById('btn-radiansToDegrees');
+                       if(btnDegToRad) btnDegToRad.addEventListener('click', degreesToRadians);
+                       if(btnRadToDeg) btnRadToDeg.addEventListener('click', radiansToDegrees);
+                      break;
+                  case 'excavator-renderer':
+                      pageContent.innerHTML = getExcavatorRendererHTML();
+                      initExcavatorRenderer(); // This function should attach its own listeners
+                      break;
+                  // Add more cases for other pages
+                  default:
+                       // Show welcome message if pageName is unknown or null
+                       pageContent.innerHTML = `
+                           <div class="card">
+                               <h2>欢迎使用 Quick Tools</h2>
+                               <p>请从左侧菜单选择一个工具。</p>
+                           </div>`;
+                       // Ensure no sidebar link is active for the welcome message
+                       sidebarLinks.forEach(link => link.classList.remove('active'));
+              }
+          } catch (error) {
+              console.error("Error loading page:", pageName, error);
+              pageContent.innerHTML = '<div class="card error"><p>加载页面时出错，请查看控制台了解详情。</p></div>';
+          }
+      }, 10); // Small delay
     }
+
+    // Optional: Load a default tool or welcome message on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        // Example: load cosine theorem by default
+        // const defaultLink = document.getElementById('link-cosine-theorem');
+        // if (defaultLink) {
+        //     showPage('cosine-theorem', defaultLink);
+        // } else {
+        //     showPage(null, null); // Show welcome message
+        // }
+
+        // Or just show welcome message
+         showPage(null, null);
+    });
   </script>
 </body>
 
