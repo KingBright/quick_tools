@@ -4,7 +4,7 @@
     "size": [215.0, 147.0],
     "rotate_anchor": [0.0, 0.0],
     "rotate_anchor_pos": [0.0, 0.0],
-    "next_anchor": [-0.06, 0.0],
+    "next_anchor": [-0.03, 0.0],
     "rotate": 0.0,
     "center": [0.0, 0.0],
     "scale": 1.0
@@ -21,7 +21,7 @@
   },
   {
     "part": "arm",
-    "size": [32.0, 163.0],
+    "size": [32.0, 162.5],
     "rotate_anchor": [0.0, 0.393],
     "rotate_anchor_pos": [0.0, 0.0],
     "next_anchor": [0.0, -0.455],
@@ -31,7 +31,7 @@
   },
   {
     "part": "bucket",
-    "size": [74.0, 74.0],
+    "size": [73.5, 73.5],
     "rotate_anchor": [-0.16, 0.325],
     "rotate_anchor_pos": [0.0, 0.0],
     "next_anchor": [0.4, -0.4],
