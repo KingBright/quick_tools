@@ -17,7 +17,7 @@
     "next_anchor": [-0.455, -0.44],
     "rotate": 0.0,
     "center": [0.0, 0.0],
-    "scale": 1.337
+    "scale": 0.756
   },
   {
     "part": "arm",
@@ -27,7 +27,7 @@
     "next_anchor": [0.0, -0.455],
     "rotate": 0.0,
     "center": [0.0, 0.0],
-    "scale": 0.933
+    "scale": 0.529
   },
   {
     "part": "bucket",
@@ -37,6 +37,6 @@
     "next_anchor": [0.4, -0.4],
     "rotate": 0.0,
     "center": [0.0, 0.0],
-    "scale": 1.503
+    "scale": 0.931
   }
 ]
